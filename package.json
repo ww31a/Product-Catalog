@@ -1,0 +1,70 @@
+{
+ 
+  "name": "product-catalog",
+ 
+  "version": "1.0.0",
+ 
+  "description": "",
+ 
+  "main": "app.js",
+ 
+  "scripts": {
+ 
+   
+  "start": "nodemon app.js"
+ 
+  },
+ 
+  "repository": {
+ 
+   
+  "type": "git",
+ 
+   
+  "url": "git+https://github.com/ww31a/Product-Catalog.git"
+ 
+  },
+ 
+  "keywords": [],
+ 
+  "author": "",
+ 
+  "license": "ISC",
+ 
+  "type": "module",
+ 
+  "bugs": {
+ 
+   
+  "url": "https://github.com/ww31a/Product-Catalog/issues"
+ 
+  },
+ 
+  "homepage": "https://github.com/ww31a/Product-Catalog#readme",
+ 
+  "dependencies": {
+ 
+   
+  "cors": "^2.8.5",
+ 
+   
+  "express": "^5.1.0",
+ 
+   
+  "jsonwebtoken": "^9.0.2",
+ 
+   
+  "mongoose": "^8.19.2",
+ 
+   
+  "multer": "^2.0.2"
+ 
+  },
+ 
+  "devDependencies": {
+ 
+   
+  "nodemon": "^3.1.10"
+ 
+  }
+}
