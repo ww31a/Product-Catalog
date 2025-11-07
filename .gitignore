@@ -25,9 +25,9 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 
-# Build output
-dist/
-build/
+# # Build output
+# dist/
+# build/
 
 # Temporary files
 tmp/

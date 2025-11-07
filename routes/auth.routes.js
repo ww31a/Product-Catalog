@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { adminLogin, adminLogout } from "../controllers/auth.controller.js";
+import { adminLogin } from "../controllers/auth.controller.js";
+import limiter from "../middlewares/ratelimit.js";
 const authrouter = Router();
 
-authrouter.post('/login', adminLogin)
-authrouter.post('/logout', adminLogout)
+authrouter.post('/login',limiter, adminLogin)
+
 
 export default authrouter;

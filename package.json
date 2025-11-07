@@ -1,88 +1,38 @@
 {
- 
   "name": "product-catalog",
- 
   "version": "1.0.0",
- 
   "description": "",
- 
   "main": "app.js",
- 
   "scripts": {
- 
-   
-  "start": "node app.js",
- 
-   
-  "dev": "nodemon app.js"
- 
+    "start": "node app.js",
+    "dev": "nodemon app.js"
   },
- 
   "repository": {
- 
-   
-  "type": "git",
- 
-   
-  "url": "git+https://github.com/ww31a/Product-Catalog.git"
- 
+    "type": "git",
+    "url": "git+https://github.com/ww31a/Product-Catalog.git"
   },
- 
   "keywords": [],
- 
   "author": "",
- 
   "license": "ISC",
- 
   "type": "module",
- 
   "bugs": {
- 
-   
-  "url": "https://github.com/ww31a/Product-Catalog/issues"
- 
+    "url": "https://github.com/ww31a/Product-Catalog/issues"
   },
- 
   "homepage": "https://github.com/ww31a/Product-Catalog#readme",
- 
   "dependencies": {
- 
-   
-  "bcrypt": "^6.0.0",
- 
-   
-  "cloudinary": "^1.41.3",
- 
-   
-  "cookie-parser": "^1.4.7",
- 
-   
-  "cors": "^2.8.5",
- 
-   
-  "dotenv": "^17.2.3",
- 
-   
-  "express": "^5.1.0",
- 
-   
-  "jsonwebtoken": "^9.0.2",
- 
-   
-  "mongoose": "^8.19.2",
- 
-   
-  "multer": "^2.0.2",
- 
-   
-  "multer-storage-cloudinary": "^4.0.0"
- 
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^1.41.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.19.2",
+    "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0"
   },
- 
   "devDependencies": {
- 
-   
-  "nodemon": "^3.1.10"
- 
+    "nodemon": "^3.1.10"
   }
 }
