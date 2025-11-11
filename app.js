@@ -1,4 +1,7 @@
 import dotenv from 'dotenv';
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
 dotenv.config();
 import express from 'express';
 import connectDB from './database/mongodb.js';
@@ -12,8 +15,9 @@ await connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const _dirname = path.resolve();
-console.log(_dirname);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 app.use(cookieParser());
 app.use(express.json());
@@ -30,12 +34,12 @@ app.use('/api/products', productrouter);
 app.use('/api/admin/auth', authrouter);
 
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(_dirname, "frontend/dist")));
-  app.get('/*', (req, res) => {
-    res.sendFile(path.resolve(_dirname, "frontend", "dist", "index.html"));
+  app.use(express.static(join(__dirname, "frontend", "dist")));
+  
+  app.all("*", (req, res) => {
+    res.sendFile(join(__dirname, "frontend", "dist", "index.html"));
   });
 }
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Product Catalog backend running on http://0.0.0.0:${PORT}`);
 });
