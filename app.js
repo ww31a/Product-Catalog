@@ -9,7 +9,6 @@ import cors from 'cors';
 import productrouter from './routes/products.routes.js';
 import authrouter from './routes/auth.routes.js';
 import cookieParser from 'cookie-parser';
-import path from 'path';
 
 await connectDB();
 
@@ -24,6 +23,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== "production") {
+  // app.use(cors());
   app.use(cors({
     origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
     credentials: true,

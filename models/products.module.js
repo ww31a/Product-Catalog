@@ -20,7 +20,7 @@ const productSchema = new mongoose.Schema({
     brand:{
         type:String
     }
-})
+}, { timestamps: true }); 
 
 
 
