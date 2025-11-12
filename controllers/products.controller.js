@@ -35,8 +35,8 @@ export const getProductByID = async (req, res) => {
 export const addProduct = async (req, res) => {
   try {
     const { title, description, price, brand } = req.body;
-    if (!title || !description || !price) {
-      return res.status(400).json({ message: "Title, description, and price are required" });
+    if (!title || !description || !price || !brand) {
+      return res.status(400).json({ message: "Title, description,brand and price are required" });
     }
 
     const product = await Product.create({
@@ -66,7 +66,7 @@ export const updateProduct = async (req, res) => {
 
     if (req.file) updatedData.image = req.file.path;
 
-    const requiredFields = ["title", "description", "price"];
+    const requiredFields = ["title", "description", "price","brand"];
     for (let field of requiredFields) {
       if (field in updatedData && !updatedData[field]) {
         return res.status(400).json({ message: `${field} cannot be empty` });

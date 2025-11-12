@@ -5,21 +5,22 @@ const productSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    image: {
-        type: String,
-        
-    },
-    description: {
-        type:String, 
-        required:true
-    },
     price:{
         type:Number, 
         required:true
     },
     brand:{
-        type:String
-    }
+        type:String,
+        required:true
+    },
+    description: {
+        type:String, 
+        required:true
+    },
+    image: {
+        type: String,
+        
+    },
 }, { timestamps: true }); 
 
 
