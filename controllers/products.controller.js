@@ -4,12 +4,42 @@ import Product from "../models/products.module.js";
 
 export const getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find({}).sort({ createdAt: -1 });
-    res.status(200).json(products);
+    // Get currentPage and limit from query params
+    const page = req.query.page ? Number(req.query.page) : null;
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+
+    let products;
+    let total = await Product.countDocuments({});
+
+    if (page && limit) {
+      // Pagination requested
+      const skip = (page - 1) * limit;
+      products = await Product.find({})
+        .sort({ createdAt: -1 }) // sort by newest first
+        .skip(skip)
+        .limit(limit);
+
+      res.status(200).json({
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+        products,
+      });
+    } else {
+      // No pagination, return all products sorted
+      products = await Product.find({}).sort({ createdAt: -1 });
+      res.status(200).json({
+        total,
+        products,
+      });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
  
 export const getProductByID = async (req, res) => {
