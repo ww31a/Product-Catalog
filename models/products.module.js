@@ -24,7 +24,7 @@ const productSchema = new mongoose.Schema({
     // owner: {
     //     type: mongoose.Schema.Types.ObjectId,
     //     ref: "Admin",   
-    //     required: true,
+    //     required: true,ii
     // }
 }, { timestamps: true });
 
