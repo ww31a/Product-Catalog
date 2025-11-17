@@ -1,5 +1,5 @@
 import express from "express";
-import { verifyAuthentication } from "../middlewares/verifyadmin.js";
+import { verifyAdmin } from "../middlewares/verifyadmin.js";
 import upload from "../middlewares/upload.js";
 import {
   addProduct,
@@ -16,20 +16,20 @@ router.get("/", getAllProducts);
 router.get("/:id", getProductByID);
 
 // Protected routes
-router.post("/", verifyAuthentication, (req, res) => {
+router.post("/", verifyAdmin, (req, res) => {
   upload.single("image")(req, res, function (err) {
     if (err) return res.status(400).json({ message: err.message });
     addProduct(req, res);
   });
 });
 
-router.put("/:id", verifyAuthentication, (req, res) => {
+router.put("/:id", verifyAdmin, (req, res) => {
   upload.single("image")(req, res, function (err) {
     if (err) return res.status(400).json({ message: err.message });
     updateProduct(req, res);
   });
 });
 
-router.delete("/:id", verifyAuthentication, deleteProduct);
+router.delete("/:id", verifyAdmin, deleteProduct);
 
 export default router;

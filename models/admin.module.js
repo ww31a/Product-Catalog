@@ -1,24 +1,29 @@
 import mongoose from "mongoose";
 
-const adminSchema = new mongoose.Schema({
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        validate: {
-            validator: function (v) {
-                return /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/.test(v);
-            },
-            message: props => `${props.value} is not a valid email address!`
-        }
+const adminSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-    password: {
-        type: String,
-        required: true,
-    }
-})
 
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
+
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+    },
+  },
+  { timestamps: true }
+);
 
 const Admin = mongoose.model("Admin", adminSchema);
 export default Admin;
