@@ -1,21 +1,18 @@
 import express from "express";
 import { verifyAdmin } from "../middlewares/verifyadmin.js";
 import upload from "../middlewares/upload.js";
-import {
-  addProduct,
-  deleteProduct,
-  getAllProducts,
-  getProductByID,
-  updateProduct,
-} from "../controllers/products.controller.js";
+import { getAllProducts, getProductByID } from "../controllers/publicProducts.controller.js";
+import { addProduct, deleteProduct, getAdminProductByID, getAdminProducts, updateProduct } from "../controllers/adminProducts.controller.js";
 
 const router = express.Router();
 
-// Public routes
+// Public route 
 router.get("/", getAllProducts);
-router.get("/:id", getProductByID);
 
-// Protected routes
+// Protected ADMIN routes 
+router.get("/admin", verifyAdmin, getAdminProducts);
+router.get("/admin/product/:id", verifyAdmin, getAdminProductByID); 
+
 router.post("/", verifyAdmin, (req, res) => {
   upload.single("image")(req, res, function (err) {
     if (err) return res.status(400).json({ message: err.message });
@@ -31,5 +28,8 @@ router.put("/:id", verifyAdmin, (req, res) => {
 });
 
 router.delete("/:id", verifyAdmin, deleteProduct);
+
+// Public route 
+router.get("/product/:id", getProductByID);
 
 export default router;

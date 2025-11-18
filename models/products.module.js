@@ -20,12 +20,12 @@ const productSchema = new mongoose.Schema({
     image: {
         type: String,
 
+    },
+    owner: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin",   
+        required: true,
     }
-    // owner: {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: "Admin",   
-    //     required: true,ii
-    // }
 }, { timestamps: true });
 
 
