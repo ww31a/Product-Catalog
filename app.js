@@ -11,6 +11,7 @@ import productrouter from './routes/products.routes.js';
 import adminAuthRouter from './routes/adminAuth.routes.js';
 import userAuthRouter from './routes/userAuth.routes.js'
 import cookieParser from 'cookie-parser';
+import cartRouter from './routes/cart.routes.js';
 
 await connectDB();
 
@@ -35,6 +36,7 @@ if (process.env.NODE_ENV !== "production") {
 app.use('/api/products', productrouter);
 app.use('/api/admin/auth', adminAuthRouter);
 app.use('/api/user/auth',userAuthRouter)
+app.use('/api/cart',cartRouter)
 
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(join(__dirname, "frontend", "dist")));

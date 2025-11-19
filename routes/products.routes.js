@@ -6,9 +6,6 @@ import { addProduct, deleteProduct, getAdminProductByID, getAdminProducts, updat
 
 const router = express.Router();
 
-// Public route 
-router.get("/", getAllProducts);
-
 // Protected ADMIN routes 
 router.get("/admin", verifyAdmin, getAdminProducts);
 router.get("/admin/product/:id", verifyAdmin, getAdminProductByID); 
@@ -30,6 +27,7 @@ router.put("/:id", verifyAdmin, (req, res) => {
 router.delete("/:id", verifyAdmin, deleteProduct);
 
 // Public route 
+router.get("/", getAllProducts);
 router.get("/product/:id", getProductByID);
 
 export default router;
