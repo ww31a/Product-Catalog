@@ -50,7 +50,8 @@ export const adminLogin = async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       token,
-      role: "admin"
+      role: "admin",
+      name: admin.name
     });
 
   } catch (err) {

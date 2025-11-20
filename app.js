@@ -12,8 +12,9 @@ import adminAuthRouter from './routes/adminAuth.routes.js';
 import userAuthRouter from './routes/userAuth.routes.js'
 import cookieParser from 'cookie-parser';
 import cartRouter from './routes/cart.routes.js';
+import orderRouter from './routes/order.routes.js';
 
-await connectDB();
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -37,6 +38,7 @@ app.use('/api/products', productrouter);
 app.use('/api/admin/auth', adminAuthRouter);
 app.use('/api/user/auth',userAuthRouter)
 app.use('/api/cart',cartRouter)
+app.use('/api/order',orderRouter)
 
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(join(__dirname, "frontend", "dist")));
@@ -45,6 +47,19 @@ if (process.env.NODE_ENV === "production") {
     res.sendFile(join(__dirname, "frontend", "dist", "index.html"));
   });
 }
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Product Catalog backend running on http://0.0.0.0:${PORT}`);
-});
+
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on ${PORT}`);
+    });
+  } catch (err) {
+    console.error("Startup failed", err);
+  }
+};
+
+startServer();
+
+
