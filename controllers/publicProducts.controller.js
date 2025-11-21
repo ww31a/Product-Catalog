@@ -10,6 +10,9 @@ export const getAllProducts = async (req, res) => {
     let products;
 
     if (page && limit) {
+      if (page < 1 || limit < 1){
+        return res.status(400).json({ message: "Page & limit must be ≥ 1" });
+      }
       const skip = (page - 1) * limit;
       products = await Product.find({}, "-owner")
         .sort({ createdAt: -1 })

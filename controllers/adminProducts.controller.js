@@ -13,16 +13,14 @@ export const getAdminProducts = async (req, res) => {
 
     const products = await Product.find({ owner: adminId });
 
-    if (!products?.length) {
-      return res.status(404);
-    }
-
-    res.status(200).json({ products });
+    // Always return products array, even if empty
+    return res.status(200).json({ products });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
+
 
 export const getAdminProductByID = async (req, res) => {
   try {
@@ -49,7 +47,7 @@ export const getAdminProductByID = async (req, res) => {
 export const addProduct = async (req, res) => {
   try {
     const { title, description, price, brand } = req.body;
-    if (!title || !description || !price || !brand) {
+    if ([title, description, brand].some(val => !val) || price == null) {
       return res.status(400).json({ message: "Title, description, brand, and price are required" });
     }
 

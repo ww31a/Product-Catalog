@@ -4,7 +4,7 @@ import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const currency = 'pkr'
-const deliveryCharges = 10
+const deliveryCharges = 200
 
 const placeOrderCOD = async (req, res) => {
     try {
@@ -26,7 +26,7 @@ const placeOrderCOD = async (req, res) => {
 
         await User.findByIdAndUpdate(userId, { cartData: {} })
 
-        res.status(200).json({ message: "Order placed" })
+        res.status(200).json({ message: "Order placed successfully" })
 
     }
     catch (err) {
@@ -39,7 +39,6 @@ const placeOrderStripe = async (req, res) => {
         const userId = req.user.id
         const { items, amount, address } = req.body
         const { origin } = req.headers
-
 
         const orderData = {
             userId,
@@ -97,14 +96,18 @@ const verifyStripe = async (req, res) => {
     const { success, orderId } = req.body
 
     try {
-        if (success == "true") {
+        if (!orderId) {
+            return res.status(400).json({ message: 'Order ID is required' });
+        }
+
+        if (success === "true" || success === true) {
             await Order.findByIdAndUpdate(orderId, { payment: true });
             await User.findByIdAndUpdate(userId, { cartData: {} })
-            res.json({ success: true })
+            res.json({ success: true, message: 'Payment verified successfully' })
         }
         else {
-            await Order.findByIdAndUpdate(orderId);
-            res.json({ success: false })
+            await Order.findByIdAndDelete(orderId);
+            res.json({ success: false, message: 'Payment cancelled or failed' })
         }
 
     }
@@ -139,4 +142,3 @@ const userOrders = async (req, res) => {
 
 
 export { placeOrderCOD, placeOrderStripe, allOrder, userOrders, verifyStripe }
-

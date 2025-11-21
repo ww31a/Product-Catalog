@@ -5,7 +5,9 @@ import { generateToken } from '../utils/generateToken.js'
 
 export const adminRegister = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, password } = req.body;
+    const email = req.body.email.toLowerCase();
+
 
     const exists = await Admin.findOne({ email });
     if (exists)
@@ -32,7 +34,9 @@ export const adminRegister = async (req, res) => {
 
 export const adminLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = req.body.email.toLowerCase();
+
 
     const admin = await Admin.findOne({ email });
     if (!admin)

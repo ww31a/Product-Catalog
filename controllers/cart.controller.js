@@ -5,7 +5,7 @@ const getUserCart = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select("cartData");
         const cartData = user.cartData || {};
-        
+
         const productIds = Object.keys(cartData);
         const products = await Product.find({ _id: { $in: productIds } }).select("title price image");
 
@@ -31,7 +31,7 @@ const modifyCart = async (req, res) => {
         const { itemId, action } = req.body;
 
         if (!itemId || !action) {
-            return res.json({ error: false, message: "itemId and action are required" });
+            return res.status(400).json({ error: true, message: "itemId and action are required" });
         }
 
         const user = await User.findById(userId);
@@ -48,12 +48,12 @@ const modifyCart = async (req, res) => {
 
         if (action === "subtract") {
             if (currentQty <= 1) {
-                await User.findByIdAndUpdate(userId,{ $unset: { [`cartData.${itemId}`]: "" } });
+                await User.findByIdAndUpdate(userId, { $unset: { [`cartData.${itemId}`]: "" } });
                 return res.json({ success: true, message: "Item removed from cart" });
 
             } else {
                 const newQty = currentQty - 1;
-                await User.findByIdAndUpdate(userId,{ $set: { [`cartData.${itemId}`]: newQty } });
+                await User.findByIdAndUpdate(userId, { $set: { [`cartData.${itemId}`]: newQty } });
                 return res.json({ success: true, message: "Item quantity decreased", quantity: newQty });
             }
         }
