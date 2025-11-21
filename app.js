@@ -40,13 +40,17 @@ app.use('/api/user/auth',userAuthRouter)
 app.use('/api/cart',cartRouter)
 app.use('/api/order',orderRouter)
 
+// Serve React frontend in production
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(join(__dirname, "frontend", "dist")));
-  
-  app.all("*", (req, res) => {
-    res.sendFile(join(__dirname, "frontend", "dist", "index.html"));
+  const distPath = join(__dirname, "frontend", "dist");
+  app.use(express.static(distPath));
+
+  // Send index.html for all unknown routes
+  app.get("*", (req, res) => {
+    res.sendFile(join(distPath, "index.html"));
   });
 }
+
 
 const startServer = async () => {
   try {
