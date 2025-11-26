@@ -19,7 +19,6 @@ const adminSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      minlength: 6,
     },
   },
   { timestamps: true }

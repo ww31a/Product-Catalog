@@ -46,7 +46,7 @@ export const getAdminProductByID = async (req, res) => {
 
 export const addProduct = async (req, res) => {
   try {
-    const { title, description, price, brand } = req.body;
+    const { title, description,stock, price, brand } = req.body;
     if ([title, description, brand].some(val => !val) || price == null) {
       return res.status(400).json({ message: "Title, description, brand, and price are required" });
     }
@@ -55,6 +55,7 @@ export const addProduct = async (req, res) => {
       title,
       description,
       price,
+      stock,
       brand,
       image: req.file?.path || "",
       owner: req.user.id

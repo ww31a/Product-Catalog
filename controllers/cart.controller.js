@@ -1,14 +1,20 @@
 import User from "../models/user.module.js";
 import Product from "../models/products.module.js";
 
+import mongoose from "mongoose";
+
 const getUserCart = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select("cartData");
         const cartData = user.cartData || {};
 
-        const productIds = Object.keys(cartData);
+        // Step 1: Get only valid ObjectId keys
+        const productIds = Object.keys(cartData).filter(id => mongoose.Types.ObjectId.isValid(id));
+
+        // Step 2: Query only valid product IDs
         const products = await Product.find({ _id: { $in: productIds } }).select("title price image");
 
+        // Step 3: Merge quantity from cartData
         const cartArray = products.map(product => ({
             _id: product._id,
             quantity: cartData[product._id],
@@ -19,7 +25,6 @@ const getUserCart = async (req, res) => {
 
         res.json({ success: true, cartData: cartArray });
     } catch (err) {
-        console.log(err);
         res.json({ error: true, message: err.message });
     }
 };
@@ -34,10 +39,16 @@ const modifyCart = async (req, res) => {
             return res.status(400).json({ error: true, message: "itemId and action are required" });
         }
 
+        const product = await Product.findById(itemId);
+
         const user = await User.findById(userId);
         const currentQty = user.cartData[itemId] || 0;
 
         if (action === "add") {
+
+            if (product.stock <= 0) {
+                return res.status(400).json({ message:"item is out of stock" });
+            }
             const newQty = currentQty + 1;
             await User.findByIdAndUpdate(
                 userId,
@@ -58,10 +69,9 @@ const modifyCart = async (req, res) => {
             }
         }
 
-        res.json({ error: false, message: "Invalid action" });
+        res.json({ error: true, message: "Invalid action" });
 
     } catch (err) {
-        console.log(err);
         res.json({ error: true, message: err.message });
     }
 };
@@ -72,7 +82,7 @@ const removeFromCart = async (req, res) => {
         const { itemId } = req.params;
 
         if (!itemId) {
-            return res.json({ error: false, message: "itemId is required" });
+            return res.json({ error: true, message: "itemId is required" });
         }
 
         await User.findByIdAndUpdate(
@@ -82,7 +92,6 @@ const removeFromCart = async (req, res) => {
 
         res.json({ success: true, message: "Item removed from cart" });
     } catch (err) {
-        console.log(err);
         res.json({ error: true, message: err.message });
     }
 };

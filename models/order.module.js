@@ -7,6 +7,7 @@ const orderSchema = new mongoose.Schema({
     address: { type: Object, required: true },
     paymentMethod: { type: String, required: true },
     payment: { type: Boolean, required: true, default: false },
+    status: { type: String, enum: ["pending", "processing", "delivered"], default: "pending" },
     date: { type: Number, required:true }
 })
 

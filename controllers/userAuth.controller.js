@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js'
 import User from "../models/user.module.js";
+import { mergeGuestCartIntoUserCart } from "../utils/mergeCart.js";
 
 export const userRegister = async (req, res) => {
   try {
@@ -31,7 +32,7 @@ export const userRegister = async (req, res) => {
 
 export const userLogin = async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password,guestCart } = req.body;
     const email = req.body.email.toLowerCase();
 
 
@@ -42,6 +43,11 @@ export const userLogin = async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match)
       return res.status(400).json({ message: "Invalid credentials" });
+
+    
+     if (guestCart?.length > 0) {
+            await mergeGuestCartIntoUserCart(user._id, guestCart);
+        }
 
     const token = generateToken({
       id: user._id,

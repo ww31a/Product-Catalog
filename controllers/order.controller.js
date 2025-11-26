@@ -1,5 +1,6 @@
 import Order from "../models/order.module.js";
 import User from "../models/user.module.js";
+import Product from "../models/products.module.js";
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -10,6 +11,31 @@ const placeOrderCOD = async (req, res) => {
     try {
         const userId = req.user.id
         const { items, amount, address } = req.body;
+
+        // Step 1: Check stock for all items
+        for (const item of items) {
+            const product = await Product.findById(item._id);
+            if (!product) return res.status(404).json({ message: `Product not found: ${item.title}` });
+            if (product.stock < item.quantity)
+                return res.status(400).json({ message: `Not enough stock for ${product.title}` });
+        }
+
+        // Step 2: Decrement stock safely
+        for (const item of items) {
+            const product = await Product.findById(item._id);
+
+            // Prevent negative stock
+            if (!product || product.stock < item.quantity) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Not enough stock for product: ${product?.name || item._id}`,
+                });
+            }
+
+            product.stock -= item.quantity;
+            await product.save();
+        }
+
 
         const orderData = {
             userId,
@@ -39,6 +65,31 @@ const placeOrderStripe = async (req, res) => {
         const userId = req.user.id
         const { items, amount, address } = req.body
         const { origin } = req.headers
+
+        // Step 1: Check stock for all items
+        for (const item of items) {
+            const product = await Product.findById(item._id);
+            if (!product) return res.status(404).json({ message: `Product not found: ${item.title}` });
+            if (product.stock < item.quantity)
+                return res.status(400).json({ message: `Not enough stock for ${product.title}` });
+        }
+
+        // Step 2: Decrement stock safely
+        for (const item of items) {
+            const product = await Product.findById(item._id);
+
+            // Prevent negative stock
+            if (!product || product.stock < item.quantity) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Not enough stock for product: ${product?.name || item._id}`,
+                });
+            }
+
+            product.stock -= item.quantity;
+            await product.save();
+        }
+
 
         const orderData = {
             userId,
@@ -117,23 +168,29 @@ const verifyStripe = async (req, res) => {
 }
 
 
-const allOrder = async (req, res) => {
-    try {
-        const orders = await Order.find({})
-        res.status(200).json({ orders })
-    }
-    catch (err) {
-        res.status(500).json({ message: err.message })
-    }
-}
+// const allOrder = async (req, res) => {
+//     try {
+//         const orders = await Order.find({})
+//         res.status(200).json({ orders })
+//     }
+//     catch (err) {
+//         res.status(500).json({ message: err.message })
+//     }
+// }
 
 
-const userOrders = async (req, res) => {
+const getUserOrders = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const orders = await Order.find({ userId })
-        res.status(200).json({ orders })
+        // const orders = await Order.find({ userId })
+        // res.status(200).json({ orders })
+
+        const orders = await Order.find({
+            userId,
+            $or: [{ paymentMethod: "COD" }, { payment: true }]
+        }).populate("items.product address").sort({ createdAt: -1 });
+        res.status(200).json({ orders });
     }
     catch (err) {
         res.status(500).json({ message: err.message })
@@ -141,4 +198,4 @@ const userOrders = async (req, res) => {
 }
 
 
-export { placeOrderCOD, placeOrderStripe, allOrder, userOrders, verifyStripe }
+export { placeOrderCOD, placeOrderStripe, getUserOrders, verifyStripe }
