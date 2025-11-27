@@ -6,7 +6,6 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "product_catalog",
-    upload_preset: "webwritecatalog",
     format: async (req, file) => {
       const mimeMap = {
         "image/jpeg": "jpg",

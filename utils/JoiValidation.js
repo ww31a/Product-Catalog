@@ -87,4 +87,85 @@ const orderSchema = Joi.object({
         })
 });
 
-export { signupSchema, orderSchema };
+const productSchema = Joi.object({
+    title: Joi.string()
+        .min(2)
+        .max(100)
+        .required()
+        .messages({
+            "string.base": "Title must be a string",
+            "string.empty": "Title is required",
+            "string.min": "Title must be at least 2 characters",
+            "string.max": "Title cannot exceed 100 characters",
+            "any.required": "Title is required",
+        }),
+
+    price: Joi.number()
+        .min(0)
+        .max(10000000)
+        .required()
+        .messages({
+            "number.base": "Price must be a number",
+            "number.min": "Price cannot be negative",
+            "number.max": "Price exceeds maximum allowed value",
+            "any.required": "Price is required",
+        }),
+
+    brand: Joi.string()
+        .min(2)
+        .max(50)
+        .required()
+        .messages({
+            "string.base": "Brand must be a string",
+            "string.empty": "Brand is required",
+            "string.min": "Brand must be at least 2 characters",
+            "string.max": "Brand cannot exceed 50 characters",
+            "any.required": "Brand is required",
+        }),
+
+    category: Joi.string()
+        .allow("", null) // optional
+        .max(50)
+        .messages({
+            "string.base": "Category must be a string",
+            "string.max": "Category cannot exceed 50 characters",
+        }),
+
+    description: Joi.string()
+        .min(5)
+        .max(500)
+        .required()
+        .messages({
+            "string.base": "Description must be a string",
+            "string.empty": "Description is required",
+            "string.min": "Description must be at least 5 characters",
+            "string.max": "Description cannot exceed 500 characters",
+            "any.required": "Description is required",
+        }),
+
+    stock: Joi.number()
+        .min(0)
+        .max(1000)
+        .required()
+        .messages({
+            "number.base": "Stock must be a number",
+            "number.min": "Stock cannot be negative",
+            "number.max": "Stock exceeds maximum allowed value",
+            "any.required": "Stock is required",
+        }),
+
+    image: Joi.string()
+        .allow("", null)
+        .messages({
+            "string.base": "Image path must be a string",
+        }),
+
+    sizes: Joi.alternatives()
+        .try(
+            Joi.string(),  // Allow JSON string from form-data
+            Joi.array().items(Joi.string().valid("S", "M", "L", "XL"))  // Allow array
+        )
+        .optional()
+});
+
+export { signupSchema, orderSchema, productSchema };

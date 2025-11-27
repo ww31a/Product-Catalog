@@ -8,26 +8,30 @@ const productSchema = new mongoose.Schema({
     price: {
         type: Number,
         required: true,
-        min: [0, "Price cannot be negative"],
-        max: [10000000, "Price exceeds maximum allowed value"]
     },
     brand: {
         type: String,
         required: true
+    },
+    category: {
+        type: String,   // optional
+    },
+    sizes: {
+        type: [String],
+        required:false,
+        default:undefined
     },
     description: {
         type: String,
         required: true
     },
     image: {
-        type: String
+        type: String // main product image
     },
     stock: {
         type: Number,
         required: true,
         default: 0,
-        min: [0, "Stock cannot be negative"],
-        max: [1000, "Stock exceeds maximum allowed value"]
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
