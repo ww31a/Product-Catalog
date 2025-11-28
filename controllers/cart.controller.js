@@ -35,65 +35,126 @@ const getUserCart = async (req, res) => {
   }
 };
 
-const modifyCart = async (req, res) => {
+const addToCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { itemId, action, size } = req.body;
+    const { itemId, size } = req.body;
+
+    if (!itemId) {
+      return res.status(400).json({ error: true, message: "itemId is required" });
+    }
+
+    const product = await Product.findById(itemId).select("stock sizes");
+    if (!product) {
+      return res.status(404).json({ error: true, message: "Product not found" });
+    }
+
+    // Check stock
+    if (product.stock <= 0) {
+      return res.status(400).json({ error: true, message: "Item out of stock" });
+    }
+
+    const hasSizes = product.sizes && product.sizes.length > 0;
+
+    // If product HAS sizes → size is REQUIRED
+    if (hasSizes && !size) {
+      return res.status(400).json({ error: true, message: "Please select a size" });
+    }
+
+    // Validate the selected size
+    if (hasSizes && size && !product.sizes.includes(size)) {
+      return res.status(400).json({ error: true, message: `Size ${size} not available` });
+    }
+
+    // Get current cart data
+    const user = await User.findById(userId).select("cartData");
+    const current = user.cartData[itemId] || { quantity: 0, size: null };
+
+    // If product has NO sizes → ignore size param
+    const finalSize = hasSizes ? size : null;
+    const newQty = current.quantity + 1;
+
+    // Check if adding this quantity exceeds stock
+    if (newQty > product.stock) {
+      return res.status(400).json({
+        error: true,
+        message: `Only ${product.stock} items available in stock`
+      });
+    }
+
+    await User.findByIdAndUpdate(
+      userId,
+      { $set: { [`cartData.${itemId}`]: { quantity: newQty, size: finalSize } } }
+    );
+
+    return res.json({
+      success: true,
+      message: "Item added to cart",
+      quantity: newQty,
+      size: finalSize
+    });
+  } catch (err) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+};
+
+// Modify cart quantity (increase/decrease - only checks stock, not size)
+const modifyCartQuantity = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { itemId, action } = req.body;
 
     if (!itemId || !action) {
       return res.status(400).json({ error: true, message: "itemId and action required" });
     }
 
-    const product = await Product.findById(itemId).select("stock sizes");
-    if (!product) return res.status(404).json({ error: true, message: "Product not found" });
+    if (!["increase", "decrease"].includes(action)) {
+      return res.status(400).json({ error: true, message: "Action must be 'increase' or 'decrease'" });
+    }
+
+    const product = await Product.findById(itemId).select("stock");
+    if (!product) {
+      return res.status(404).json({ error: true, message: "Product not found" });
+    }
 
     const user = await User.findById(userId).select("cartData");
-    const current = user.cartData[itemId] || { quantity: 0, size: null };
+    const current = user.cartData[itemId];
 
-    // --- ADD ---
-    if (action === "add") {
-      if (product.stock <= 0) {
-        return res.status(400).json({ error: true, message: "Item out of stock" });
-      }
+    if (!current || current.quantity <= 0) {
+      return res.status(400).json({ error: true, message: "Item not in cart" });
+    }
 
-      const hasSizes = product.sizes && product.sizes.length > 0;
-
-      // If product HAS sizes → size is REQUIRED
-      if (hasSizes && !size) {
-        return res.status(400).json({ error: true, message: "Please select a size" });
-      }
-
-      // If product has sizes, validate the selected size
-      if (hasSizes && size && !product.sizes.includes(size)) {
-        return res.status(400).json({ error: true, message: `Size ${size} not available` });
-      }
-
-      // If product has NO sizes → ignore size param
-      const finalSize = hasSizes ? size : null;
+    // --- INCREASE ---
+    if (action === "increase") {
       const newQty = current.quantity + 1;
+
+      // Check stock availability
+      if (newQty > product.stock) {
+        return res.status(400).json({
+          error: true,
+          message: `Only ${product.stock} items available in stock`
+        });
+      }
 
       await User.findByIdAndUpdate(
         userId,
-        { $set: { [`cartData.${itemId}`]: { quantity: newQty, size: finalSize } } }
+        { $set: { [`cartData.${itemId}`]: { quantity: newQty, size: current.size } } }
       );
 
       return res.json({
         success: true,
-        message: "Item added",
+        message: "Quantity increased",
         quantity: newQty,
-        size: finalSize
+        size: current.size
       });
     }
 
-    // --- SUBTRACT ---
-    if (action === "subtract") {
-      if (current.quantity <= 0) {
-        return res.status(400).json({ error: true, message: "Item not in cart" });
-      }
-
+    // --- DECREASE ---
+    if (action === "decrease") {
       if (current.quantity === 1) {
+        // Remove item from cart if quantity becomes 0
         await User.findByIdAndUpdate(userId, { $unset: { [`cartData.${itemId}`]: "" } });
-        return res.json({ success: true, message: "Item removed from cart" });
+        return res.json({ success: true, message: "Item removed from cart", quantity: 0 });
       }
 
       const newQty = current.quantity - 1;
@@ -109,12 +170,11 @@ const modifyCart = async (req, res) => {
         size: current.size
       });
     }
-
-    return res.status(400).json({ error: true, message: "Invalid action" });
   } catch (err) {
     res.status(500).json({ error: true, message: err.message });
   }
 };
+
 
 const removeFromCart = async (req, res) => {
   try {
@@ -130,4 +190,4 @@ const removeFromCart = async (req, res) => {
   }
 };
 
-export { getUserCart, modifyCart, removeFromCart };
+export { getUserCart, modifyCartQuantity, removeFromCart, addToCart };

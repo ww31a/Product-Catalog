@@ -1,5 +1,5 @@
 import express from "express";
-import { placeOrderCOD,placeOrderStripe, verifyStripe, getUserOrders } from "../controllers/order.controller.js";
+import { placeOrderCOD,placeOrderStripe, verifyStripe, getUserOrders, cancelOrder } from "../controllers/order.controller.js";
 import { verifyAdmin } from "../middlewares/verifyadmin.js";
 import { verifyUser } from "../middlewares/verifyUser.js";
 import { validateBody } from "../middlewares/validateBody.js";
@@ -16,7 +16,7 @@ orderRouter.put('/admin/status',verifyAdmin,updateOrderStatus)
 orderRouter.post('/place',verifyUser,validateBody(orderSchema),placeOrderCOD)
 orderRouter.post('/stripe',verifyUser,validateBody(orderSchema),placeOrderStripe)
 
-
+orderRouter.post('/cancel',verifyUser,cancelOrder)
 orderRouter.get('/',verifyUser,getUserOrders)
 orderRouter.post('/verifystripe',verifyUser,verifyStripe)
 

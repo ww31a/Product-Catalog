@@ -36,10 +36,17 @@ export const getAdminOrders = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   try {
     const adminId = req.user.id;
-    const { orderId,status } = req.body;
+    const { orderId, status } = req.body;
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Check if order is already cancelled - cannot be changed
+    if (order.status === "cancelled") {
+      return res.status(400).json({ 
+        message: "Cannot update a cancelled order" 
+      });
+    }
 
     // Only allow admin to change orders with their products
     const adminProducts = await Product.find({ owner: adminId }).select("_id");
@@ -48,7 +55,11 @@ export const updateOrderStatus = async (req, res) => {
     const hasProduct = order.items.some(item =>
       ownedIds.includes(item._id.toString())
     );
-    if (!hasProduct) return res.status(403).json({ message: "Not allowed" });
+    if (!hasProduct) {
+      return res.status(403).json({ 
+        message: "Not allowed to update this order" 
+      });
+    }
 
     // Update order status
     order.status = status;
@@ -56,12 +67,11 @@ export const updateOrderStatus = async (req, res) => {
     
     // Optionally: send email to user about status change
 
-    res.status(200).json({ message: "Order status updated", order });
+    res.status(200).json({ 
+      message: "Order status updated successfully", 
+      order 
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-
-
-
-
