@@ -1,69 +1,57 @@
-// utilities/cart.utils.js
 import User from "../models/user.module.js";
 import Product from "../models/products.module.js";
 import mongoose from "mongoose";
 
 export const mergeGuestCartIntoUserCart = async (userId, guestCart) => {
-    const user = await User.findById(userId);
+  const user = await User.findById(userId);
 
-    if (!user) throw new Error("User not found");
+  if (!user.cartData) user.cartData = {};
+  const existingCart = user.cartData;
 
-    const existingCart = user.cartData || {};
+  for (let item of guestCart) {
+    const itemId = item._id;
+    const guestQty = item.quantity || 1;
+    const guestSize = item.size || null;
 
-    // Ensure guestCart is an array
-    if (!Array.isArray(guestCart)) return user;
+    // 1️⃣ Validate Mongo ID
+    if (!mongoose.Types.ObjectId.isValid(itemId)) continue;
 
-    for (const item of guestCart) {
-        const productId = item._id;
-        const guestQuantity = Number(item.quantity) || 0;
-        const guestSize = item.size || null;
+    // 2️⃣ Fetch product
+    const product = await Product.findById(itemId).select("stock sizes");
+    if (!product) continue; // product removed from DB
 
-        //  invalid product id → skip
-        if (!mongoose.Types.ObjectId.isValid(productId)) {
-            continue;
-        }
+    // 3️⃣ Validate stock
+    if (product.stock <= 0) continue; // out of stock
 
-        // Check if product exists
-        const product = await Product.findById(productId).select("stock sizes");
-        if (!product) continue; // invalid / deleted product
+    // 4️⃣ Guest quantity cannot exceed stock → reject item
+    if (guestQty > product.stock) continue; 
 
-        // Check stock
-        if (product.stock <= 0) continue; // cannot add out-of-stock
+    // 5️⃣ Size validation
+    const hasSizes = product.sizes?.length > 0;
 
-        const hasSizes = product.sizes && product.sizes.length > 0;
-
-        // Check size validity
-        if (hasSizes) {
-            if (!guestSize || !product.sizes.includes(guestSize)) {
-                continue; // invalid or missing size
-            }
-        }
-
-        // Get existing user item
-        const existingItem = existingCart[productId] || { quantity: 0, size: hasSizes ? guestSize : null };
-
-        const newQty = existingItem.quantity + guestQuantity;
-
-        // Cannot exceed stock
-        if (newQty > product.stock) {
-            existingItem.quantity = product.stock; // clamp to max stock
-        } else {
-            existingItem.quantity = newQty;
-        }
-
-        // Ensure size is set correctly
-        if (hasSizes) {
-            existingItem.size = guestSize;
-        } else {
-            existingItem.size = null;
-        }
-
-        existingCart[productId] = existingItem;
+    if (hasSizes) {
+      if (!guestSize) continue; // size required
+      if (!product.sizes.includes(guestSize)) continue; // size not allowed
     }
 
-    user.cartData = existingCart;
-    user.markModified("cartData");
-    await user.save();
+    // 6️⃣ Merge with existing cart
+    const existing = existingCart[itemId] || { quantity: 0, size: guestSize };
 
-    return user;
+    const totalQty = existing.quantity + guestQty;
+
+    // 7️⃣ Combined quantity exceeds stock → reject item completely
+    if (totalQty > product.stock) continue;
+
+    // 8️⃣ Passed validations → add to cart
+    existingCart[itemId] = {
+      quantity: totalQty,
+      size: hasSizes ? guestSize : null
+    };
+  }
+
+  user.cartData = existingCart;
+  user.markModified("cartData");
+  await user.save();
+
+  return user;
 };
