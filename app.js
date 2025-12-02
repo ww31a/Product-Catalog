@@ -13,6 +13,7 @@ import userAuthRouter from './routes/userAuth.routes.js'
 import cookieParser from 'cookie-parser';
 import cartRouter from './routes/cart.routes.js';
 import orderRouter from './routes/order.routes.js';
+import inventoryRouter from './routes/inventory.routes.js';
 
 
 
@@ -50,6 +51,7 @@ app.use('/api/admin/auth', adminAuthRouter);
 app.use('/api/user/auth',userAuthRouter)
 app.use('/api/cart',cartRouter)
 app.use('/api/order',orderRouter)
+app.use('/api/inventory',inventoryRouter)
 
 // Serve React frontend in production
 if (process.env.NODE_ENV === "production") {

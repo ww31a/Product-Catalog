@@ -1,10 +1,13 @@
 import mongoose from "mongoose";
 import Product from '../models/products.module.js';
+import stockHistory from "../models/stockHistory.module.js";
+
 
 // GET all admin products
 export const getAdminProducts = async (req, res) => {
   try {
     const adminId = req.user?.id;
+
     if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
       return res.status(400).json({ message: "Invalid admin ID" });
     }
@@ -15,6 +18,8 @@ export const getAdminProducts = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+
 
 // GET a single product by ID
 export const getAdminProductByID = async (req, res) => {
@@ -37,7 +42,9 @@ export const getAdminProductByID = async (req, res) => {
   }
 };
 
-// ADD product
+
+
+// ADD product – also create initial stock log if stock > 0
 export const addProduct = async (req, res) => {
   try {
     const { title, description, stock, price, brand, category, sizes } = req.body;
@@ -46,13 +53,12 @@ export const addProduct = async (req, res) => {
       return res.status(400).json({ message: "Title, description, brand, and price are required" });
     }
 
-    // Parse sizes if sent as JSON string
-    let parsedsizes = [];
+    // Parse sizes
+    let parsedSizes = [];
     if (sizes) {
-      parsedsizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+      parsedSizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
 
-      // Validate each variation: must be S, M, or L
-      for (let v of parsedsizes) {
+      for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
           return res.status(400).json({ message: "sizes must be one of: S, M, L, XL" });
         }
@@ -66,10 +72,24 @@ export const addProduct = async (req, res) => {
       stock,
       brand,
       category,
-      sizes: parsedsizes,
-      image: req.file?.path || "", // multer/cloudinary file
+      sizes: parsedSizes,
+      image: req.file?.path || "",
       owner: req.user.id
     });
+
+    // ✔ Create initial stock history (only if stock > 0)
+    if (product.stock > 0) {
+      await stockHistory.create({
+        productId: product._id,
+        previousStock: 0,
+        newStock: product.stock,
+        change: product.stock,
+        type: "add",
+        reason: "restock",
+        changedBy: req.user.id,
+        notes: "Initial stock added"
+      });
+    }
 
     res.status(201).json(product);
   } catch (err) {
@@ -77,7 +97,9 @@ export const addProduct = async (req, res) => {
   }
 };
 
-// UPDATE product
+
+
+// UPDATE product – logs STOCK CHANGES ONLY
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -88,25 +110,28 @@ export const updateProduct = async (req, res) => {
     }
 
     const existingProduct = await Product.findOne({ _id: id, owner: adminId });
-    if (!existingProduct) return res.status(404).json({ message: "Product not found or not owned by you" });
+    if (!existingProduct) {
+      return res.status(404).json({ message: "Product not found or not owned by you" });
+    }
 
     const updatedData = { ...req.body };
     if (req.file) updatedData.image = req.file.path;
 
-    // Parse and validate sizes if provided
+    // Parse and validate sizes
     if (updatedData.sizes) {
-      const parsedsizes = typeof updatedData.sizes === "string"
+      const parsedSizes = typeof updatedData.sizes === "string"
         ? JSON.parse(updatedData.sizes)
         : updatedData.sizes;
 
-      for (let v of parsedsizes) {
+      for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
           return res.status(400).json({ message: "sizes must be one of: S, M, L, XL" });
         }
       }
-      updatedData.sizes = parsedsizes;
+      updatedData.sizes = parsedSizes;
     }
 
+    // Validate required fields
     const requiredFields = ["title", "description", "price", "brand"];
     for (let field of requiredFields) {
       if (field in updatedData && !updatedData[field]) {
@@ -114,7 +139,28 @@ export const updateProduct = async (req, res) => {
       }
     }
 
+    // 🟨 CHECK IF STOCK IS BEING CHANGED
+    let previousStock = existingProduct.stock;
+    let newStock = updatedData.stock;
+
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true });
+
+    // 🟦 ONLY LOG HISTORY IF STOCK ACTUALLY CHANGED
+    if (newStock !== undefined && previousStock !== newStock) {
+      const change = newStock - previousStock;
+
+      await stockHistory.create({
+        productId: existingProduct._id,
+        previousStock,
+        newStock,
+        change,
+        type: change > 0 ? "add" : "remove",
+        reason: change > 0 ? "restock" : "adjustment",
+        changedBy: adminId,
+        notes: "Stock updated by admin"
+      });
+    }
+
     res.status(200).json(updatedProduct);
 
   } catch (err) {
@@ -122,7 +168,9 @@ export const updateProduct = async (req, res) => {
   }
 };
 
-// DELETE product
+
+
+// DELETE product – no stock history required
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -136,6 +184,42 @@ export const deleteProduct = async (req, res) => {
     if (!product) return res.status(404).json({ message: "Product not found or not owned by you" });
 
     res.status(200).json({ message: "Product deleted successfully", product });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+
+// BULK DELETE
+export const bulkDeleteProducts = async (req, res) => {
+  try {
+    const adminId = req.user?.id;
+    const { productIds } = req.body;
+
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: "productIds must be a non-empty array" });
+    }
+
+    const invalidIds = productIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ message: `Invalid product IDs: ${invalidIds.join(", ")}` });
+    }
+
+    const result = await Product.deleteMany({
+      _id: { $in: productIds },
+      owner: adminId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "No products deleted. Make sure they exist and belong to you." });
+    }
+
+    res.status(200).json({
+      message: `${result.deletedCount} product(s) deleted successfully`,
+      deletedCount: result.deletedCount
+    });
 
   } catch (err) {
     res.status(500).json({ message: err.message });

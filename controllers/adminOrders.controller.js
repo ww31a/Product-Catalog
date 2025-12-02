@@ -8,30 +8,37 @@ export const getAdminOrders = async (req, res) => {
         const products = await Product.find({ owner: adminId }).select("_id");
         const ownedIds = products.map(p => p._id.toString());
 
-        // Step 2: Fetch all orders containing any of admin's products
+        // Step 2: Fetch all orders that contain any of this admin’s products
         const orders = await Order.find({
             "items._id": { $in: ownedIds }
-        });
+        }).sort({ createdAt: -1 });   // ⬅️ sorting added here
 
-        // Step 3: Filter items inside each order
+        // Step 3: Filter items + recalculate amount ONLY for admin's products
         const filteredOrders = orders.map(order => {
             const filteredItems = order.items.filter(item =>
                 ownedIds.includes(item._id.toString())
             );
 
+            // Recalculate amount for admin-only products
+            const adminAmount = filteredItems.reduce((sum, item) => {
+                return sum + (item.price * item.quantity);
+            }, 0);
+
             return {
                 ...order.toObject(),
-                items: filteredItems
+                items: filteredItems,
+                amount: adminAmount
             };
         });
 
-        // 🔥 Return SAME format as user: { orders: [...] }
         return res.status(200).json({ orders: filteredOrders });
 
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: "Server error" });
     }
 };
+
 
 export const updateOrderStatus = async (req, res) => {
   try {

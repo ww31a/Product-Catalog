@@ -1,6 +1,17 @@
 import mongoose from "mongoose";
 
+const generateOrderId = () => {
+    // Generates 6-character alphanumeric uppercase code
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `PRODCAT-${code}`;
+};
+
 const orderSchema = new mongoose.Schema({
+    orderId: {
+        type: String,
+        default: generateOrderId,
+        unique: true,
+    },
     userId: { type: String, required: true },
     items: { type: Array, required: true },
     amount: { type: Number, required: true },

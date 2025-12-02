@@ -2,7 +2,7 @@ import express from "express";
 import { verifyAdmin } from "../middlewares/verifyadmin.js";
 import upload from "../middlewares/upload.js";
 import { getAllProducts, getProductByID } from "../controllers/publicProducts.controller.js";
-import { addProduct, deleteProduct, getAdminProductByID, getAdminProducts, updateProduct } from "../controllers/adminProducts.controller.js";
+import { addProduct, bulkDeleteProducts, deleteProduct, getAdminProductByID, getAdminProducts, updateProduct } from "../controllers/adminProducts.controller.js";
 import { validateBody } from '../middlewares/validateBody.js'
 import { productSchema } from "../utils/JoiValidation.js";
 const router = express.Router();
@@ -14,10 +14,11 @@ router.get("/admin/product/:id", verifyAdmin, getAdminProductByID);
 router.post("/", verifyAdmin,upload.single("image"),validateBody(productSchema),addProduct);
 
 
-router.post("/:id", verifyAdmin,upload.single("image"),validateBody(productSchema),updateProduct);
+router.put("/:id", verifyAdmin,upload.single("image"),validateBody(productSchema),updateProduct);
 
 
 router.delete("/:id", verifyAdmin, deleteProduct);
+router.post("/admin/bulk-delete",verifyAdmin,bulkDeleteProducts)
 
 // Public route 
 router.get("/", getAllProducts);
