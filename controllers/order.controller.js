@@ -1,43 +1,31 @@
 import Order from "../models/order.module.js";
 import User from "../models/user.module.js";
 import Product from "../models/products.module.js";
-import Stripe from 'stripe'
+import stockHistory from "../models/stockHistory.module.js";
+import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-const currency = 'pkr'
-const deliveryCharges = 200
-const taxRate = 0.05
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const currency = 'pkr';
+const deliveryCharges = 200;
+const taxRate = 0.05;
 
 const placeOrderCOD = async (req, res) => {
     try {
-        const userId = req.user.id
+        const userId = req.user.id;
         const { items, amount, address } = req.body;
 
         // Step 1: Check stock for all items
         for (const item of items) {
             const product = await Product.findById(item._id);
-            if (!product) return res.status(404).json({ message: `Product not found: ${item.title}` });
-            if (product.stock < item.quantity)
-                return res.status(400).json({ message: `Not enough stock for ${product.title}` });
-        }
-
-        // Step 2: Decrement stock safely
-        for (const item of items) {
-            const product = await Product.findById(item._id);
-
-            // Prevent negative stock
-            if (!product || product.stock < item.quantity) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Not enough stock for product: ${product?.name || item._id}`,
-                });
+            if (!product) {
+                return res.status(404).json({ message: `Product not found: ${item.title}` });
             }
-
-            product.stock -= item.quantity;
-            await product.save();
+            if (product.stock < item.quantity) {
+                return res.status(400).json({ message: `Not enough stock for ${product.title}` });
+            }
         }
 
-
+        // Step 2: Create order first
         const orderData = {
             userId,
             items,
@@ -46,52 +34,95 @@ const placeOrderCOD = async (req, res) => {
             paymentMethod: "COD",
             payment: false,
             date: Date.now()
-        }
+        };
 
         const newOrder = new Order(orderData);
         await newOrder.save();
 
-        await User.findByIdAndUpdate(userId, { cartData: {} })
+        // Step 3: Decrement stock and create stock history
+        for (const item of items) {
+            const product = await Product.findById(item._id);
 
-        res.status(200).json({ message: "Order placed successfully" })
+            if (!product || product.stock < item.quantity) {
+                // Rollback: delete order if stock issue
+                await Order.findByIdAndDelete(newOrder._id);
+                return res.status(400).json({
+                    success: false,
+                    message: `Not enough stock for product: ${product?.title || item._id}`,
+                });
+            }
 
+            const previousStock = product.stock;
+            product.stock -= item.quantity;
+            const newStock = product.stock;
+            await product.save();
+
+            // ✅ Create stock history for order placement
+            await stockHistory.create({
+                productId: product._id,
+                previousStock,
+                newStock,
+                change: -item.quantity,
+                type: "remove",
+                reason: "sale",  // ✅ Reason is "sale" when order is placed
+                changedBy: product.owner,  // ✅ Product owner (admin)
+                orderId: newOrder.orderId,
+                notes: `Stock reduced for COD order ${newOrder.orderId}`
+            });
+        }
+
+        await User.findByIdAndUpdate(userId, { cartData: {} });
+
+        res.status(200).json({
+            success: true,
+            message: "Order placed successfully",
+            orderId: newOrder._id
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-    catch (err) {
-        res.status(500).json({ message: err.message })
-    }
-}
+};
 
 const placeOrderStripe = async (req, res) => {
     try {
-        const userId = req.user.id
-        const { items, amount, address } = req.body
-        console.log(amount)
-        const { origin } = req.headers
+        const userId = req.user.id;
+        const { items, amount, address } = req.body;
+        const { origin } = req.headers;
 
         // Step 1: Check stock for all items
         for (const item of items) {
             const product = await Product.findById(item._id);
-            if (!product) return res.status(404).json({ message: `Product not found: ${item.title}` });
-            if (product.stock < item.quantity)
+            if (!product) {
+                return res.status(404).json({ message: `Product not found: ${item.title}` });
+            }
+            if (product.stock < item.quantity) {
                 return res.status(400).json({ message: `Not enough stock for ${product.title}` });
+            }
         }
 
+        const subtotal = amount;
+        const tax = subtotal * taxRate;
+
+
+        const orderTotal = subtotal + deliveryCharges + tax;
+
+
+        // Step 2: Create order (stock not reduced yet for Stripe)
         const orderData = {
             userId,
             items,
-            amount,
+            amount: orderTotal,
             address,
             paymentMethod: "Stripe",
             payment: false,
             date: Date.now()
-        }
+        };
 
         const newOrder = new Order(orderData);
         await newOrder.save();
 
-        const subtotal = amount;
-        const tax = Math.round(subtotal * taxRate);
-        
+
         const line_items = items.map((item) => ({
             price_data: {
                 currency,
@@ -101,7 +132,7 @@ const placeOrderStripe = async (req, res) => {
                 unit_amount: item.price * 100,
             },
             quantity: item.quantity
-        }))
+        }));
 
         line_items.push({
             price_data: {
@@ -112,8 +143,9 @@ const placeOrderStripe = async (req, res) => {
                 unit_amount: deliveryCharges * 100,
             },
             quantity: 1
-        })
-         line_items.push({
+        });
+
+        line_items.push({
             price_data: {
                 currency,
                 product_data: {
@@ -122,27 +154,25 @@ const placeOrderStripe = async (req, res) => {
                 unit_amount: tax * 100,
             },
             quantity: 1
-        })
+        });
 
         const session = await stripe.checkout.sessions.create({
             success_url: `${origin}/verify?success=true&orderId=${newOrder._id}`,
             cancel_url: `${origin}/verify?success=false&orderId=${newOrder._id}`,
             line_items,
             mode: 'payment'
-        })
+        });
 
-        res.status(200).json({ session_url: session.url })
+        res.status(200).json({ session_url: session.url });
 
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-    catch (err) {
-        res.status(500).json({ message: err.message })
-    }
-}
-
+};
 
 const verifyStripe = async (req, res) => {
-    const userId = req.user.id
-    const { success, orderId } = req.body
+    const userId = req.user.id;
+    const { success, orderId } = req.body;
 
     try {
         const order = await Order.findById(orderId);
@@ -171,61 +201,66 @@ const verifyStripe = async (req, res) => {
                     });
                 }
 
+                const previousStock = product.stock;
                 product.stock -= item.quantity;
+                const newStock = product.stock;
                 await product.save();
+
+                // ✅ Create stock history for successful Stripe payment
+                await stockHistory.create({
+                    productId: product._id,
+                    previousStock,
+                    newStock,
+                    change: -item.quantity,
+                    type: "remove",
+                    reason: "sale",  // ✅ Reason is "sale" when payment confirmed
+                    changedBy: product.owner,
+                    orderId: order.orderId,
+                    notes: `Stock reduced for Stripe order ${order.orderId} (payment confirmed)`
+                });
             }
+
             await Order.findByIdAndUpdate(orderId, { payment: true });
-            await User.findByIdAndUpdate(userId, { cartData: {} })
-            res.json({ success: true, message: 'Payment verified successfully' })
-        }
-        else {
+            await User.findByIdAndUpdate(userId, { cartData: {} });
+
+            res.json({
+                success: true,
+                message: 'Payment verified successfully'
+            });
+        } else {
+            // Payment failed - just delete the order (no stock was reduced)
             await Order.findByIdAndDelete(orderId);
-            res.json({ success: false, message: 'Payment cancelled or failed' })
+            res.json({
+                success: false,
+                message: 'Payment cancelled or failed'
+            });
         }
 
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-    catch (err) {
-        res.status(500).json({ message: err.message })
-    }
-}
-
-
-// const allOrder = async (req, res) => {
-//     try {
-//         const orders = await Order.find({})
-//         res.status(200).json({ orders })
-//     }
-//     catch (err) {
-//         res.status(500).json({ message: err.message })
-//     }
-// }
-
+};
 
 const getUserOrders = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // const orders = await Order.find({ userId })
-        // res.status(200).json({ orders })
-
         const orders = await Order.find({
             userId,
             $or: [{ paymentMethod: "COD" }, { payment: true }]
-        }).populate("items.product address").sort({ createdAt: -1 });
+        }).sort({ createdAt: -1 });
+
         res.status(200).json({ orders });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-    catch (err) {
-        res.status(500).json({ message: err.message })
-    }
-}
+};
 
 const cancelOrder = async (req, res) => {
     try {
         const userId = req.user.id;
         const { orderId } = req.body;
-        console.log(orderId)
 
-        // Find the order
         const order = await Order.findById(orderId);
 
         if (!order) {
@@ -237,7 +272,7 @@ const cancelOrder = async (req, res) => {
             return res.status(403).json({ message: "Unauthorized to cancel this order" });
         }
 
-        // Check if order status is "Pending" (only pending orders can be cancelled)
+        // Check if order status is "pending"
         if (order.status !== "pending") {
             return res.status(400).json({
                 message: `Cannot cancel order with status: ${order.status}`
@@ -247,25 +282,46 @@ const cancelOrder = async (req, res) => {
         // Restore stock for each item in the order
         for (const item of order.items) {
             const product = await Product.findById(item._id);
+
             if (product) {
+                const previousStock = product.stock;
                 product.stock += item.quantity;
+                const newStock = product.stock;
                 await product.save();
+
+                // ✅ Create stock history for order cancellation
+                await stockHistory.create({
+                    productId: product._id,
+                    previousStock,
+                    newStock,
+                    change: item.quantity,
+                    type: "add",
+                    reason: "return",  // ✅ Reason is "return" for cancelled orders
+                    changedBy: product.owner,
+                    orderId: order.orderId,
+                    notes: `Stock restored - Order ${order.orderId} cancelled by customer`
+                });
             }
         }
 
-        // Update order status to "Cancelled"
+        // Update order status to "cancelled"
         order.status = "cancelled";
         await order.save();
 
         res.status(200).json({
+            success: true,
             message: "Order cancelled successfully",
             order
         });
-    }
-    catch (err) {
+    } catch (err) {
         res.status(500).json({ message: err.message });
     }
-}
+};
 
-
-export { placeOrderCOD, placeOrderStripe, getUserOrders, verifyStripe, cancelOrder }
+export {
+    placeOrderCOD,
+    placeOrderStripe,
+    getUserOrders,
+    verifyStripe,
+    cancelOrder
+};
