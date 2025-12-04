@@ -140,8 +140,10 @@ export const updateProduct = async (req, res) => {
     }
 
     // 🟨 CHECK IF STOCK IS BEING CHANGED
-    let previousStock = existingProduct.stock;
-    let newStock = updatedData.stock;
+    let previousStock = Number(existingProduct.stock);
+    let newStock = updatedData.stock !== undefined 
+      ? Number(updatedData.stock) 
+      : undefined;
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true });
 
@@ -157,7 +159,7 @@ export const updateProduct = async (req, res) => {
         type: change > 0 ? "add" : "remove",
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: adminId,
-        notes: "Stock updated by admin"
+        notes: `Stock ${change > 0 ? 'increased' : 'decreased'} by ${Math.abs(change)}`
       });
     }
 
@@ -169,8 +171,7 @@ export const updateProduct = async (req, res) => {
 };
 
 
-
-// DELETE product – no stock history required
+// DELETE product – also delete associated stock history
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -181,9 +182,17 @@ export const deleteProduct = async (req, res) => {
     }
 
     const product = await Product.findOneAndDelete({ _id: id, owner: adminId });
-    if (!product) return res.status(404).json({ message: "Product not found or not owned by you" });
+    if (!product) {
+      return res.status(404).json({ message: "Product not found or not owned by you" });
+    }
 
-    res.status(200).json({ message: "Product deleted successfully", product });
+    // ✅ Delete all stock history for this product
+    await stockHistory.deleteMany({ productId: id });
+
+    res.status(200).json({ 
+      message: "Product and its stock history deleted successfully", 
+      product 
+    });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -192,7 +201,7 @@ export const deleteProduct = async (req, res) => {
 
 
 
-// BULK DELETE
+// BULK DELETE – also delete associated stock history
 export const bulkDeleteProducts = async (req, res) => {
   try {
     const adminId = req.user?.id;
@@ -216,12 +225,64 @@ export const bulkDeleteProducts = async (req, res) => {
       return res.status(404).json({ message: "No products deleted. Make sure they exist and belong to you." });
     }
 
+    // ✅ Delete all stock history for these products
+    const historyResult = await stockHistory.deleteMany({ 
+      productId: { $in: productIds } 
+    });
+
     res.status(200).json({
       message: `${result.deletedCount} product(s) deleted successfully`,
-      deletedCount: result.deletedCount
+      deletedCount: result.deletedCount,
+      stockHistoryDeleted: historyResult.deletedCount
     });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+export const updateStock = async (req,res) => {
+  try{
+    const {id} = req.params;
+    const {stock} = req.body;
+    const adminId = req.user.id;
+
+    if(!mongoose.Types.ObjectId.isValid(id)){
+      return res.status(400).json({success:false,message:"Invalid product ID"})
+    }
+    if(stock === undefined || stock < 0) {
+      return res.status(400).json({success:false,message:"Stock must be non-negative"})
+    }
+
+    const existingProduct = await Product.findOne({_id:id,owner:adminId});
+    if(!existingProduct){
+      return res.status(400).json({success:false, message:"Product does not exist"});
+    }
+
+    const previousStock = existingProduct.stock;
+    const newStock = parseInt(stock);
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      id,
+      {stock:newStock},
+      {new:true}
+    ).populate('owner','name email');
+
+    if(previousStock !== newStock){
+      const change = newStock - previousStock;
+
+      await stockHistory.create({
+        productId: existingProduct._id,
+        previousStock,
+        newStock,
+        change,
+        type: change>0?"add":"remove",
+        reason: change>0?"restock":"adjustment",
+        changedBy: adminId,
+        notes: "Quick stock change from seller stock page"
+      })
+    }
+  } catch(err){
+    res.status(500).json({success:false, message: err.message})
+  }
+}

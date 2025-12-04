@@ -2,7 +2,7 @@ import express from "express";
 import { verifyAdmin } from "../middlewares/verifyadmin.js";
 import upload from "../middlewares/upload.js";
 import { getAllProducts, getProductByID } from "../controllers/publicProducts.controller.js";
-import { addProduct, bulkDeleteProducts, deleteProduct, getAdminProductByID, getAdminProducts, updateProduct } from "../controllers/adminProducts.controller.js";
+import { addProduct, bulkDeleteProducts, deleteProduct, getAdminProductByID, getAdminProducts, updateProduct, updateStock } from "../controllers/adminProducts.controller.js";
 import { validateBody } from '../middlewares/validateBody.js'
 import { productSchema } from "../utils/JoiValidation.js";
 const router = express.Router();
@@ -15,6 +15,7 @@ router.post("/", verifyAdmin,upload.single("image"),validateBody(productSchema),
 
 
 router.put("/:id", verifyAdmin,upload.single("image"),validateBody(productSchema),updateProduct);
+router.put("/:id/stock",verifyAdmin,updateStock)
 
 
 router.delete("/:id", verifyAdmin, deleteProduct);

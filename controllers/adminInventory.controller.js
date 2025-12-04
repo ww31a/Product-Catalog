@@ -1,5 +1,7 @@
 import Product from '../models/products.module.js'
 import stockHistory from '../models/stockHistory.module.js'
+import Order from '../models/order.module.js'
+import mongoose from 'mongoose'
 
 /**
  * Helper to get product IDs owned by the admin
@@ -23,21 +25,26 @@ export const getBestSellingProducts = async (req, res) => {
 
     const adminProductIds = await getAdminProductIds(adminId)
 
-    // Aggregate sales (stock decreases with reason 'sale')
-    const bestSellers = await stockHistory.aggregate([
+    // Aggregate sales from delivered orders only
+    const bestSellers = await Order.aggregate([
       {
         $match: {
-          type: 'remove',
-          reason: 'sale',
-          productId: { $in: adminProductIds },
+          status: 'delivered',
           createdAt: { $gte: dateThreshold }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $match: {
+          'items._id': { $in: adminProductIds.map(id => id.toString()) }
         }
       },
       {
         $group: {
-          _id: '$productId',
-          totalSold: { $sum: { $abs: '$change' } },
-          salesCount: { $sum: 1 }
+          _id: '$items._id',
+          totalSold: { $sum: '$items.quantity' },
+          salesCount: { $sum: 1 },
+          totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
         }
       },
       { $sort: { totalSold: -1 } },
@@ -45,16 +52,25 @@ export const getBestSellingProducts = async (req, res) => {
     ])
 
     const productIds = bestSellers.map(item => item._id)
+    
     const products = await Product.find({ _id: { $in: productIds }, owner: adminId })
       .select('title brand price stock image')
 
+    // ✅ Keep nested structure with "product" key
     const result = bestSellers.map(seller => {
       const product = products.find(p => p._id.toString() === seller._id.toString())
       return {
-        product,
+        product: {
+          _id: product?._id,
+          title: product?.title,
+          brand: product?.brand,
+          price: product?.price,
+          stock: product?.stock,
+          image: product?.image
+        },
         totalSold: seller.totalSold,
         salesCount: seller.salesCount,
-        revenue: product ? product.price * seller.totalSold : 0
+        revenue: seller.totalRevenue
       }
     })
 
@@ -69,7 +85,6 @@ export const getBestSellingProducts = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
-
 /**
  * Low Stock Alert
  */
@@ -175,7 +190,7 @@ export const getStockSummary = async (req, res) => {
 export const getDeadStock = async (req,res) => {
   try {
     const adminId = req.user.id
-    const days = parseInt(req.query.days) || 30
+    const days = parseInt(req.query.days) || 20
     const dateThreshold = new Date()
     dateThreshold.setDate(dateThreshold.getDate() - days)
 
