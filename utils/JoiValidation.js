@@ -112,7 +112,7 @@ const productSchema = Joi.object({
         }),
 
     brand: Joi.string()
-        .min(2)
+        // .min(2)
         .max(50)
         .required()
         .messages({
