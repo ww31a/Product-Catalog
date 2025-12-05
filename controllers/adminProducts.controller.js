@@ -49,7 +49,7 @@ export const addProduct = async (req, res) => {
   try {
     const { title, description, stock, price, brand, category, sizes } = req.body;
 
-    if ([title, description, brand].some(val => !val) || price == null) {
+    if ([title, description, brand, category].some(val => !val) || price == null) {
       return res.status(400).json({ message: "Title, description, brand, and price are required" });
     }
 
@@ -132,7 +132,7 @@ export const updateProduct = async (req, res) => {
     }
 
     // Validate required fields
-    const requiredFields = ["title", "description", "price", "brand"];
+    const requiredFields = ["title", "description", "price", "brand, category"];
     for (let field of requiredFields) {
       if (field in updatedData && !updatedData[field]) {
         return res.status(400).json({ message: `${field} cannot be empty` });
@@ -141,8 +141,8 @@ export const updateProduct = async (req, res) => {
 
     // 🟨 CHECK IF STOCK IS BEING CHANGED
     let previousStock = Number(existingProduct.stock);
-    let newStock = updatedData.stock !== undefined 
-      ? Number(updatedData.stock) 
+    let newStock = updatedData.stock !== undefined
+      ? Number(updatedData.stock)
       : undefined;
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true });
@@ -189,9 +189,9 @@ export const deleteProduct = async (req, res) => {
     // ✅ Delete all stock history for this product
     await stockHistory.deleteMany({ productId: id });
 
-    res.status(200).json({ 
-      message: "Product and its stock history deleted successfully", 
-      product 
+    res.status(200).json({
+      message: "Product and its stock history deleted successfully",
+      product
     });
 
   } catch (err) {
@@ -226,8 +226,8 @@ export const bulkDeleteProducts = async (req, res) => {
     }
 
     // ✅ Delete all stock history for these products
-    const historyResult = await stockHistory.deleteMany({ 
-      productId: { $in: productIds } 
+    const historyResult = await stockHistory.deleteMany({
+      productId: { $in: productIds }
     });
 
     res.status(200).json({
@@ -241,22 +241,22 @@ export const bulkDeleteProducts = async (req, res) => {
   }
 };
 
-export const updateStock = async (req,res) => {
-  try{
-    const {id} = req.params;
-    const {stock} = req.body;
+export const updateStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stock } = req.body;
     const adminId = req.user.id;
 
-    if(!mongoose.Types.ObjectId.isValid(id)){
-      return res.status(400).json({success:false,message:"Invalid product ID"})
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid product ID" })
     }
-    if(stock === undefined || stock < 0) {
-      return res.status(400).json({success:false,message:"Stock must be non-negative"})
+    if (stock === undefined || stock < 0) {
+      return res.status(400).json({ success: false, message: "Stock must be non-negative" })
     }
 
-    const existingProduct = await Product.findOne({_id:id,owner:adminId});
-    if(!existingProduct){
-      return res.status(400).json({success:false, message:"Product does not exist"});
+    const existingProduct = await Product.findOne({ _id: id, owner: adminId });
+    if (!existingProduct) {
+      return res.status(400).json({ success: false, message: "Product does not exist" });
     }
 
     const previousStock = existingProduct.stock;
@@ -264,11 +264,11 @@ export const updateStock = async (req,res) => {
 
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
-      {stock:newStock},
-      {new:true}
-    ).populate('owner','name email');
+      { stock: newStock },
+      { new: true }
+    ).populate('owner', 'name email');
 
-    if(previousStock !== newStock){
+    if (previousStock !== newStock) {
       const change = newStock - previousStock;
 
       await stockHistory.create({
@@ -276,13 +276,16 @@ export const updateStock = async (req,res) => {
         previousStock,
         newStock,
         change,
-        type: change>0?"add":"remove",
-        reason: change>0?"restock":"adjustment",
+        type: change > 0 ? "add" : "remove",
+        reason: change > 0 ? "restock" : "adjustment",
         changedBy: adminId,
         notes: "Quick stock change from seller stock page"
       })
     }
-  } catch(err){
-    res.status(500).json({success:false, message: err.message})
+    if (updatedProduct.stock == newStock) {
+      return res.status(200).json({ success: true, message: "Stock Updated Succesfully" })
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
   }
 }

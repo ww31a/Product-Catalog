@@ -15,7 +15,7 @@ router.post("/", verifyAdmin,upload.single("image"),validateBody(productSchema),
 
 
 router.put("/:id", verifyAdmin,upload.single("image"),validateBody(productSchema),updateProduct);
-router.put("/:id/stock",verifyAdmin,updateStock)
+router.patch("/:id/stock",verifyAdmin,updateStock)
 
 
 router.delete("/:id", verifyAdmin, deleteProduct);

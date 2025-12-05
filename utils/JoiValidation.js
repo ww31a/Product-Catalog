@@ -124,12 +124,14 @@ const productSchema = Joi.object({
         }),
 
     category: Joi.string()
-        .allow("", null) // optional
-        .max(50)
+        .valid("clothing", "electronics", "footwear", "bag", "grocery")
+        .required()
         .messages({
+            "any.required": "Category is required",
+            "any.only": "Category must be one of: Clothing, Electronics, Footwear, Bag, Grocery",
             "string.base": "Category must be a string",
-            "string.max": "Category cannot exceed 50 characters",
         }),
+
 
     description: Joi.string()
         .min(5)
