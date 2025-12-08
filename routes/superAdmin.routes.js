@@ -6,12 +6,14 @@ import { getAllAdmins,deleteAdmin,getPlatformOverview,getTopSellers,getAllUsers,
 
 import { getSuperAdminProfile,changePassword,superAdminLogin } from "../controllers/superAdminAuth.controller.js";
 import { verifySuperAdmin } from "../middlewares/verifySuperAdmin.js";
+import {validateBody} from '../middlewares/validateBody.js'
+import { passwordSchema } from "../utils/JoiValidation.js";
 
 const superAdminRouter = Router();
 
 // Protected routes
 superAdminRouter.get("/profile", verifySuperAdmin, getSuperAdminProfile);
-superAdminRouter.put("/change-password", verifySuperAdmin, changePassword);
+superAdminRouter.put("/change-password", verifySuperAdmin,validateBody(passwordSchema), changePassword);
 
 superAdminRouter.get('/all-admins',verifySuperAdmin,getAllAdmins);
 superAdminRouter.get('/all-users',verifySuperAdmin,getAllUsers);

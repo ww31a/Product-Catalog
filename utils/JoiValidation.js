@@ -16,6 +16,24 @@ const signupSchema = Joi.object({
         }),
 });
 
+const passwordSchema = Joi.object({
+    newPassword: Joi.string()
+        .min(8)
+        .max(20)
+        .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,20}$/)
+        .required()
+        .messages({
+            "string.pattern.base":
+                "Password must be 8-20 characters, include 1 uppercase, 1 lowercase, and 1 special character",
+            "string.min": "Password must be at least 8 characters long",
+            "string.max": "Password cannot exceed 20 characters",
+            "any.required": "New password is required",
+        }),
+    currentPassword: Joi.string().required().messages({
+        "any.required": "Current password is required",
+    }),
+});
+
 
 
 const orderSchema = Joi.object({
@@ -173,4 +191,4 @@ const productSchema = Joi.object({
         .optional()
 });
 
-export { signupSchema, orderSchema, productSchema };
+export { signupSchema,passwordSchema, orderSchema, productSchema };
