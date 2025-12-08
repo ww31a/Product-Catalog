@@ -5,9 +5,7 @@ import User from "../models/user.module.js";
 import stockHistory from "../models/stockHistory.module.js";
 import mongoose from "mongoose";
 
-/**
- * Get all admins (with filters)
- */
+
 export const getAllAdmins = async (req, res) => {
     try {
         const { status, search, page = 1, limit = 10 } = req.query;
@@ -43,9 +41,7 @@ export const getAllAdmins = async (req, res) => {
     }
 };
 
-/**
- * Delete Admin
- */
+
 export const deleteAdmin = async (req, res) => {
     try {
         const { adminId } = req.params;
@@ -65,14 +61,11 @@ export const deleteAdmin = async (req, res) => {
             });
         }
 
-        // ✅ Clean up admin's products and stock history
         const adminProducts = await Product.find({ owner: adminId }).select("_id");
         const productIds = adminProducts.map(p => p._id);
 
-        // Delete stock history for admin's products
         await stockHistory.deleteMany({ productId: { $in: productIds } });
 
-        // Delete admin's products
         await Product.deleteMany({ owner: adminId });
 
         res.json({
@@ -84,12 +77,9 @@ export const deleteAdmin = async (req, res) => {
     }
 };
 
-/**
- * Platform Overview (FIXED)
- */
+
 export const getPlatformOverview = async (req, res) => {
     try {
-        // ✅ Fixed: removed duplicate Admin count
         const [
             totalUsers,
             totalAdmins,
@@ -102,7 +92,6 @@ export const getPlatformOverview = async (req, res) => {
             Order.countDocuments(),
         ]);
 
-        // Revenue calculation (only paid orders)
         const revenueData = await Order.aggregate([
             { $match: { payment: true } },
             {
@@ -114,7 +103,6 @@ export const getPlatformOverview = async (req, res) => {
             }
         ]);
 
-        // Recent activity (last 30 days)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -150,9 +138,7 @@ export const getPlatformOverview = async (req, res) => {
     }
 };
 
-/**
- * Top Performing Sellers (FIXED)
- */
+
 export const getTopSellers = async (req, res) => {
     try {
         const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 10, 100));
@@ -161,7 +147,6 @@ export const getTopSellers = async (req, res) => {
         const dateThreshold = new Date();
         dateThreshold.setDate(dateThreshold.getDate() - days);
 
-        // ✅ Optimized: Aggregate directly from stock history
         const topSellers = await stockHistory.aggregate([
             {
                 $match: {
@@ -225,9 +210,6 @@ export const getTopSellers = async (req, res) => {
     }
 };
 
-/**
- * Get All Users (Super Admin)
- */
 export const getAllUsers = async (req, res) => {
     try {
         const { search, page = 1, limit = 10 } = req.query;
@@ -262,9 +244,7 @@ export const getAllUsers = async (req, res) => {
     }
 };
 
-/**
- * Get All Products (Super Admin)
- */
+
 export const getAllProducts = async (req, res) => {
     try {
         const { search, category, page = 1, limit = 10 } = req.query;
@@ -300,9 +280,7 @@ export const getAllProducts = async (req, res) => {
     }
 };
 
-/**
- * Get All Orders (Super Admin)
- */
+
 export const getAllOrders = async (req, res) => {
     try {
         const { status, page = 1, limit = 10 } = req.query;

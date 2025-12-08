@@ -49,8 +49,8 @@ export const addProduct = async (req, res) => {
   try {
     const { title, description, stock, price, brand, category, sizes } = req.body;
 
-    if ([title, description, brand, category].some(val => !val) || price == null) {
-      return res.status(400).json({ message: "Title, description, brand, and price are required" });
+    if (!req.file?.path) {
+      return res.status(400).json({ message: "Image is required" });
     }
 
     // Parse sizes
@@ -115,6 +115,9 @@ export const updateProduct = async (req, res) => {
     }
 
     const updatedData = { ...req.body };
+    if (!req.file?.path) {
+      return res.status(400).json({ message: "Image is required" });
+    }
     if (req.file) updatedData.image = req.file.path;
 
     // Parse and validate sizes
@@ -131,13 +134,6 @@ export const updateProduct = async (req, res) => {
       updatedData.sizes = parsedSizes;
     }
 
-    // Validate required fields
-    const requiredFields = ["title", "description", "price", "brand, category"];
-    for (let field of requiredFields) {
-      if (field in updatedData && !updatedData[field]) {
-        return res.status(400).json({ message: `${field} cannot be empty` });
-      }
-    }
 
     // 🟨 CHECK IF STOCK IS BEING CHANGED
     let previousStock = Number(existingProduct.stock);
@@ -250,7 +246,7 @@ export const updateStock = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" })
     }
-    if (stock === undefined || stock < 0) {
+    if (stock === undefined || isNaN(stock) || Number(stock) < 0) {
       return res.status(400).json({ success: false, message: "Stock must be non-negative" })
     }
 

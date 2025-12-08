@@ -53,7 +53,7 @@ app.use('/api/user/auth',userAuthRouter)
 app.use('/api/cart',cartRouter)
 app.use('/api/order',orderRouter)
 app.use('/api/inventory',inventoryRouter)
-app.use('/api/super-admin',superAdminRouter)
+app.use('/api/superadmin',superAdminRouter)
 
 // Serve React frontend in production
 if (process.env.NODE_ENV === "production") {

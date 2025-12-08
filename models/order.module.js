@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 
 const generateOrderId = () => {
-    // Generates 6-character alphanumeric uppercase code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     return `PRODCAT-${code}`;
 };

@@ -14,7 +14,6 @@ const placeOrderCOD = async (req, res) => {
         const userId = req.user.id;
         const { items, amount, address } = req.body;
 
-        // Step 1: Check stock for all items
         for (const item of items) {
             const product = await Product.findById(item._id);
             if (!product) {
@@ -25,7 +24,6 @@ const placeOrderCOD = async (req, res) => {
             }
         }
 
-        // Step 2: Create order first
         const orderData = {
             userId,
             items,
@@ -39,12 +37,10 @@ const placeOrderCOD = async (req, res) => {
         const newOrder = new Order(orderData);
         await newOrder.save();
 
-        // Step 3: Decrement stock and create stock history
         for (const item of items) {
             const product = await Product.findById(item._id);
 
             if (!product || product.stock < item.quantity) {
-                // Rollback: delete order if stock issue
                 await Order.findByIdAndDelete(newOrder._id);
                 return res.status(400).json({
                     success: false,
@@ -57,15 +53,14 @@ const placeOrderCOD = async (req, res) => {
             const newStock = product.stock;
             await product.save();
 
-            // ✅ Create stock history for order placement
             await stockHistory.create({
                 productId: product._id,
                 previousStock,
                 newStock,
                 change: -item.quantity,
                 type: "remove",
-                reason: "sale",  // ✅ Reason is "sale" when order is placed
-                changedBy: product.owner,  // ✅ Product owner (admin)
+                reason: "sale",  
+                changedBy: product.owner,  
                 orderId: newOrder.orderId,
                 notes: `Stock reduced for COD order ${newOrder.orderId}`
             });
@@ -90,7 +85,6 @@ const placeOrderStripe = async (req, res) => {
         const { items, amount, address } = req.body;
         const { origin } = req.headers;
 
-        // Step 1: Check stock for all items
         for (const item of items) {
             const product = await Product.findById(item._id);
             if (!product) {
@@ -108,7 +102,6 @@ const placeOrderStripe = async (req, res) => {
         const orderTotal = subtotal + deliveryCharges + tax;
 
 
-        // Step 2: Create order (stock not reduced yet for Stripe)
         const orderData = {
             userId,
             items,
@@ -181,12 +174,10 @@ const verifyStripe = async (req, res) => {
         }
 
         if (success === "true" || success === true) {
-            // Decrement stock for each item ONLY on successful payment
             for (const item of order.items) {
                 const product = await Product.findById(item._id);
 
                 if (!product) {
-                    // Rollback: delete order if product not found
                     await Order.findByIdAndDelete(orderId);
                     return res.status(404).json({
                         message: `Product not found: ${item.title}`
@@ -194,7 +185,6 @@ const verifyStripe = async (req, res) => {
                 }
 
                 if (product.stock < item.quantity) {
-                    // Rollback: delete order if insufficient stock
                     await Order.findByIdAndDelete(orderId);
                     return res.status(400).json({
                         message: `Not enough stock for ${product.title}`
@@ -206,14 +196,13 @@ const verifyStripe = async (req, res) => {
                 const newStock = product.stock;
                 await product.save();
 
-                // ✅ Create stock history for successful Stripe payment
                 await stockHistory.create({
                     productId: product._id,
                     previousStock,
                     newStock,
                     change: -item.quantity,
                     type: "remove",
-                    reason: "sale",  // ✅ Reason is "sale" when payment confirmed
+                    reason: "sale",  
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock reduced for Stripe order ${order.orderId} (payment confirmed)`
@@ -228,7 +217,6 @@ const verifyStripe = async (req, res) => {
                 message: 'Payment verified successfully'
             });
         } else {
-            // Payment failed - just delete the order (no stock was reduced)
             await Order.findByIdAndDelete(orderId);
             res.json({
                 success: false,
@@ -267,19 +255,16 @@ const cancelOrder = async (req, res) => {
             return res.status(404).json({ message: "Order not found" });
         }
 
-        // Check if order belongs to the user
         if (order.userId.toString() !== userId) {
             return res.status(403).json({ message: "Unauthorized to cancel this order" });
         }
 
-        // Check if order status is "pending"
         if (order.status !== "pending") {
             return res.status(400).json({
                 message: `Cannot cancel order with status: ${order.status}`
             });
         }
 
-        // Restore stock for each item in the order
         for (const item of order.items) {
             const product = await Product.findById(item._id);
 
@@ -289,14 +274,13 @@ const cancelOrder = async (req, res) => {
                 const newStock = product.stock;
                 await product.save();
 
-                // ✅ Create stock history for order cancellation
                 await stockHistory.create({
                     productId: product._id,
                     previousStock,
                     newStock,
                     change: item.quantity,
                     type: "add",
-                    reason: "return",  // ✅ Reason is "return" for cancelled orders
+                    reason: "return", 
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock restored - Order ${order.orderId} cancelled by customer`
@@ -304,7 +288,6 @@ const cancelOrder = async (req, res) => {
             }
         }
 
-        // Update order status to "cancelled"
         order.status = "cancelled";
         await order.save();
 

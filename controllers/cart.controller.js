@@ -1,4 +1,3 @@
-// controllers/cart.controller.js
 import User from "../models/user.module.js";
 import Product from "../models/products.module.js";
 import mongoose from "mongoose";
@@ -20,12 +19,12 @@ const getUserCart = async (req, res) => {
       return {
         _id: p._id,
         quantity: item.quantity,
-        size: item.size,                    // may be null
+        size: item.size,                    
         title: p.title,
         price: p.price,
         image: p.image,
-        availableSizes: p.sizes || [],      // empty if no sizes
-        hasSizes: !!p.sizes?.length         // helpful for frontend
+        availableSizes: p.sizes || [],      
+        hasSizes: !!p.sizes?.length         
       };
     });
 
@@ -49,32 +48,26 @@ const addToCart = async (req, res) => {
       return res.status(404).json({ error: true, message: "Product not found" });
     }
 
-    // Check stock
     if (product.stock <= 0) {
       return res.status(400).json({ error: true, message: "Item out of stock" });
     }
 
     const hasSizes = product.sizes && product.sizes.length > 0;
 
-    // If product HAS sizes → size is REQUIRED
     if (hasSizes && !size) {
       return res.status(400).json({ error: true, message: "Please select a size" });
     }
 
-    // Validate the selected size
     if (hasSizes && size && !product.sizes.includes(size)) {
       return res.status(400).json({ error: true, message: `Size ${size} not available` });
     }
 
-    // Get current cart data
     const user = await User.findById(userId).select("cartData");
     const current = user.cartData[itemId] || { quantity: 0, size: null };
 
-    // If product has NO sizes → ignore size param
     const finalSize = hasSizes ? size : null;
     const newQty = current.quantity + 1;
 
-    // Check if adding this quantity exceeds stock
     if (newQty > product.stock) {
       return res.status(400).json({
         error: true,
@@ -98,7 +91,6 @@ const addToCart = async (req, res) => {
   }
 };
 
-// Modify cart quantity (increase/decrease - only checks stock, not size)
 const modifyCartQuantity = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -124,11 +116,9 @@ const modifyCartQuantity = async (req, res) => {
       return res.status(400).json({ error: true, message: "Item not in cart" });
     }
 
-    // --- INCREASE ---
     if (action === "increase") {
       const newQty = current.quantity + 1;
 
-      // Check stock availability
       if (newQty > product.stock) {
         return res.status(400).json({
           error: true,
@@ -149,10 +139,8 @@ const modifyCartQuantity = async (req, res) => {
       });
     }
 
-    // --- DECREASE ---
     if (action === "decrease") {
       if (current.quantity === 1) {
-        // Remove item from cart if quantity becomes 0
         await User.findByIdAndUpdate(userId, { $unset: { [`cartData.${itemId}`]: "" } });
         return res.json({ success: true, message: "Item removed from cart", quantity: 0 });
       }

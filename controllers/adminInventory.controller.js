@@ -3,17 +3,13 @@ import stockHistory from '../models/stockHistory.module.js'
 import Order from '../models/order.module.js'
 import mongoose from 'mongoose'
 
-/**
- * Helper to get product IDs owned by the admin
- */
+
 const getAdminProductIds = async (adminId) => {
   const products = await Product.find({ owner: adminId }).select('_id')
   return products.map(p => p._id)
 }
 
-/**
- * Get Best Selling Products for logged-in admin
- */
+
 export const getBestSellingProducts = async (req, res) => {
   try {
     const adminId = req.user.id
@@ -25,7 +21,6 @@ export const getBestSellingProducts = async (req, res) => {
 
     const adminProductIds = await getAdminProductIds(adminId)
 
-    // Aggregate sales from delivered orders only
     const bestSellers = await Order.aggregate([
       {
         $match: {
@@ -56,7 +51,6 @@ export const getBestSellingProducts = async (req, res) => {
     const products = await Product.find({ _id: { $in: productIds }, owner: adminId })
       .select('title brand price stock image')
 
-    // ✅ Keep nested structure with "product" key
     const result = bestSellers.map(seller => {
       const product = products.find(p => p._id.toString() === seller._id.toString())
       return {
@@ -85,9 +79,7 @@ export const getBestSellingProducts = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
-/**
- * Low Stock Alert
- */
+
 export const getLowStockAlert = async (req,res) => {
   try {
     const adminId = req.user.id
@@ -104,9 +96,7 @@ export const getLowStockAlert = async (req,res) => {
   }
 }
 
-/**
- * Out Of Stock Alert
- */
+
 export const getOutOfStockAlert = async (req,res) => {
   try {
     const adminId = req.user.id
@@ -121,9 +111,7 @@ export const getOutOfStockAlert = async (req,res) => {
   }
 }
 
-/**
- * In Stock Alert
- */
+
 export const getInStockAlert = async (req, res) => {
   try {
     const adminId = req.user.id
@@ -139,9 +127,7 @@ export const getInStockAlert = async (req, res) => {
   }
 }
 
-/**
- * Stock Summary
- */
+
 export const getStockSummary = async (req, res) => {
   try {
     const adminId = req.user.id
@@ -184,9 +170,6 @@ export const getStockSummary = async (req, res) => {
   }
 }
 
-/**
- * Dead Stock (no stock changes in X days)
- */
 export const getDeadStock = async (req,res) => {
   try {
     const adminId = req.user.id

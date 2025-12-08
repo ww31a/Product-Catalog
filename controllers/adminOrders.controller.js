@@ -1,5 +1,6 @@
 import Order from "../models/order.module.js";
 import Product from "../models/products.module.js";
+
 export const getAdminOrders = async (req, res) => {
     try {
         const adminId = req.user.id;
@@ -48,14 +49,12 @@ export const updateOrderStatus = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Check if order is already cancelled - cannot be changed
     if (order.status === "cancelled") {
       return res.status(400).json({ 
         message: "Cannot update a cancelled order" 
       });
     }
 
-    // Only allow admin to change orders with their products
     const adminProducts = await Product.find({ owner: adminId }).select("_id");
     const ownedIds = adminProducts.map(p => p._id.toString());
 
@@ -68,12 +67,9 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Update order status
     order.status = status;
     await order.save();
     
-    // Optionally: send email to user about status change
-
     res.status(200).json({ 
       message: "Order status updated successfully", 
       order 

@@ -157,10 +157,13 @@ const productSchema = Joi.object({
         }),
 
     image: Joi.string()
-        .allow("", null)
+        .required()
         .messages({
+            "any.required": "Image is required",
             "string.base": "Image path must be a string",
+            "string.empty": "Image cannot be empty",
         }),
+
 
     sizes: Joi.alternatives()
         .try(
