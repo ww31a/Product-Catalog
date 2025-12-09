@@ -5,16 +5,43 @@ export const getAllProducts = async (req, res) => {
   try {
     const page = Number(req.query.page) || null;
     const limit = Number(req.query.limit) || null;
+    const search = req.query.search || "";
+    const category = req.query.category || "";
+    const minPrice = Number(req.query.minPrice) || null;
+    const maxPrice = Number(req.query.maxPrice) || null;
 
-    const total = await Product.countDocuments({});
+    // Build filter object
+    const filter = {};
+
+    // Search filter (searches in product name and description)
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
+
+    // Category filter
+    if (category) {
+      filter.category = { $regex: category, $options: "i" };
+    }
+
+    // Price range filter
+    if (minPrice !== null || maxPrice !== null) {
+      filter.price = {};
+      if (minPrice !== null) filter.price.$gte = minPrice;
+      if (maxPrice !== null) filter.price.$lte = maxPrice;
+    }
+
+    const total = await Product.countDocuments(filter);
     let products;
 
     if (page && limit) {
-      if (page < 1 || limit < 1){
+      if (page < 1 || limit < 1) {
         return res.status(400).json({ message: "Page & limit must be ≥ 1" });
       }
       const skip = (page - 1) * limit;
-      products = await Product.find({}, "-owner")
+      products = await Product.find(filter, "-owner")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
@@ -27,7 +54,7 @@ export const getAllProducts = async (req, res) => {
         products,
       });
     } else {
-      products = await Product.find({}, "-owner").sort({ createdAt: -1 });
+      products = await Product.find(filter, "-owner").sort({ createdAt: -1 });
       res.status(200).json({ total, products });
     }
 
