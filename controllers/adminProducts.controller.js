@@ -115,9 +115,6 @@ export const updateProduct = async (req, res) => {
     }
 
     const updatedData = { ...req.body };
-    if (!req.file?.path) {
-      return res.status(400).json({ message: "Image is required" });
-    }
     if (req.file) updatedData.image = req.file.path;
 
     // Parse and validate sizes

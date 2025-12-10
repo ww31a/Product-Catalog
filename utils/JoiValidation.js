@@ -191,4 +191,74 @@ const productSchema = Joi.object({
         .optional()
 });
 
-export { signupSchema,passwordSchema, orderSchema, productSchema };
+const updateProductSchema = Joi.object({
+    title: Joi.string()
+        .min(2)
+        .max(100)
+        .optional()
+        .messages({
+            "string.base": "Title must be a string",
+            "string.empty": "Title cannot be empty",
+            "string.min": "Title must be at least 2 characters",
+            "string.max": "Title cannot exceed 100 characters",
+        }),
+
+    price: Joi.number()
+        .min(0)
+        .max(10000000)
+        .optional()
+        .messages({
+            "number.base": "Price must be a number",
+            "number.min": "Price cannot be negative",
+            "number.max": "Price exceeds maximum allowed value",
+        }),
+
+    brand: Joi.string()
+        .max(50)
+        .optional()
+        .messages({
+            "string.base": "Brand must be a string",
+            "string.empty": "Brand cannot be empty",
+            "string.max": "Brand cannot exceed 50 characters",
+        }),
+
+    category: Joi.string()
+        .valid("clothing", "electronics", "footwear", "bag", "grocery")
+        .optional()
+        .messages({
+            "any.only": "Category must be one of: Clothing, Electronics, Footwear, Bag, Grocery",
+            "string.base": "Category must be a string",
+        }),
+
+    description: Joi.string()
+        .min(5)
+        .max(500)
+        .optional()
+        .messages({
+            "string.base": "Description must be a string",
+            "string.empty": "Description cannot be empty",
+            "string.min": "Description must be at least 5 characters",
+            "string.max": "Description cannot exceed 500 characters",
+        }),
+
+    stock: Joi.number()
+        .min(0)
+        .max(1000)
+        .optional()
+        .messages({
+            "number.base": "Stock must be a number",
+            "number.min": "Stock cannot be negative",
+            "number.max": "Stock exceeds maximum allowed value",
+        }),
+
+    sizes: Joi.alternatives()
+        .try(
+            Joi.string(),
+            Joi.array().items(Joi.string().valid("S", "M", "L", "XL"))
+        )
+        .optional()
+}).min(1).messages({
+    "object.min": "At least one field must be provided for update"
+});
+
+export { signupSchema, passwordSchema, orderSchema, productSchema, updateProductSchema };
