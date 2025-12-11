@@ -1,7 +1,8 @@
 import { Router } from "express";
 import limiter from "../middlewares/ratelimit.js";
 import { getAllAdmins,deleteAdmin,getPlatformOverview,getTopSellers,getAllUsers,
-    getAllProducts,getAllOrders
+    getAllProducts,getAllOrders,
+    bulkDeleteAdmins
  } from "../controllers/superAdminManage.controller.js";
 
 import { getSuperAdminProfile,changePassword,superAdminLogin } from "../controllers/superAdminAuth.controller.js";
@@ -23,7 +24,7 @@ superAdminRouter.get('/overview',verifySuperAdmin,getPlatformOverview);
 superAdminRouter.get('/top-sellers',verifySuperAdmin,getTopSellers);
 
 superAdminRouter.delete('/delete-admin/:adminId',verifySuperAdmin,deleteAdmin);
-superAdminRouter.post('/bulk-delete',verifySuperAdmin,deleteAdmin);
+superAdminRouter.post('/bulk-delete',verifySuperAdmin,bulkDeleteAdmins);
 
 // Public route
 superAdminRouter.post("/login",limiter, superAdminLogin);

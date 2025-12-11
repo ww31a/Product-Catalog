@@ -77,6 +77,55 @@ export const deleteAdmin = async (req, res) => {
     }
 };
 
+export const bulkDeleteAdmins = async (req, res) => {
+    try {
+        const { adminIds } = req.body; // Expecting an array of admin IDs
+
+        if (!Array.isArray(adminIds) || adminIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide an array of admin IDs"
+            });
+        }
+
+        // Validate all IDs
+        const invalidIds = adminIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+        if (invalidIds.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid admin IDs found",
+                invalidIds
+            });
+        }
+
+        // Delete admins
+        const deleteResult = await Admin.deleteMany({ _id: { $in: adminIds } });
+
+        if (deleteResult.deletedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No admins found with provided IDs"
+            });
+        }
+
+        // Get all products owned by these admins
+        const adminProducts = await Product.find({ owner: { $in: adminIds } }).select("_id");
+        const productIds = adminProducts.map(p => p._id);
+
+        // Delete stock history and products
+        await stockHistory.deleteMany({ productId: { $in: productIds } });
+        await Product.deleteMany({ owner: { $in: adminIds } });
+
+        res.json({
+            success: true,
+            message: `${deleteResult.deletedCount} admin(s) and associated data deleted successfully`,
+            deletedCount: deleteResult.deletedCount
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 
 export const getPlatformOverview = async (req, res) => {
     try {
@@ -283,10 +332,22 @@ export const getAllProducts = async (req, res) => {
 
 export const getAllOrders = async (req, res) => {
     try {
-        const { status, page = 1, limit = 10 } = req.query;
+        const { status, search, page = 1, limit = 10 } = req.query;
 
         const query = {};
-        if (status) query.status = status;
+        
+        // Filter by status
+        if (status) {
+            query.status = status;
+        }
+
+        // Search functionality
+        if (search) {
+            query.$or = [
+                { orderId: { $regex: search, $options: 'i' } },
+                { paymentMethod: { $regex: search, $options: 'i' } }
+            ];
+        }
 
         const orders = await Order.find(query)
             .populate("userId", "name email")
