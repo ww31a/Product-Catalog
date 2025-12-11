@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 
 const { ObjectId } = mongoose.Types;
 
+// ========================= GET CART =========================
 const getUserCart = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("cartData");
@@ -12,19 +13,21 @@ const getUserCart = async (req, res) => {
     const productIds = Object.keys(cartData).filter(id => ObjectId.isValid(id));
 
     const products = await Product.find({ _id: { $in: productIds } })
-      .select("title price image sizes stock");
+      .select("title price image sizes stock owner")
+      .populate("owner", "name email");   // <-- ADDED
 
     const cartArray = products.map(p => {
       const item = cartData[p._id] || { quantity: 0, size: null };
       return {
         _id: p._id,
         quantity: item.quantity,
-        size: item.size,                    
+        size: item.size,
         title: p.title,
         price: p.price,
         image: p.image,
-        availableSizes: p.sizes || [],      
-        hasSizes: !!p.sizes?.length         
+        availableSizes: p.sizes || [],
+        hasSizes: !!p.sizes?.length,
+        owner: p.owner ?? null        // <-- ADDED (populated)
       };
     });
 
@@ -34,6 +37,8 @@ const getUserCart = async (req, res) => {
   }
 };
 
+
+// ========================= ADD TO CART =========================
 const addToCart = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -43,7 +48,10 @@ const addToCart = async (req, res) => {
       return res.status(400).json({ error: true, message: "itemId is required" });
     }
 
-    const product = await Product.findById(itemId).select("stock sizes");
+    const product = await Product.findById(itemId)
+      .select("stock sizes owner")
+      .populate("owner", "name email");   // <-- ADDED
+
     if (!product) {
       return res.status(404).json({ error: true, message: "Product not found" });
     }
@@ -84,13 +92,16 @@ const addToCart = async (req, res) => {
       success: true,
       message: "Item added to cart",
       quantity: newQty,
-      size: finalSize
+      size: finalSize,
+      owner: product.owner || null    // <-- ADDED
     });
   } catch (err) {
     res.status(500).json({ error: true, message: err.message });
   }
 };
 
+
+// ========================= MODIFY CART =========================
 const modifyCartQuantity = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -104,7 +115,10 @@ const modifyCartQuantity = async (req, res) => {
       return res.status(400).json({ error: true, message: "Action must be 'increase' or 'decrease'" });
     }
 
-    const product = await Product.findById(itemId).select("stock");
+    const product = await Product.findById(itemId)
+      .select("stock owner")
+      .populate("owner", "name email");   // <-- ADDED
+
     if (!product) {
       return res.status(404).json({ error: true, message: "Product not found" });
     }
@@ -135,14 +149,20 @@ const modifyCartQuantity = async (req, res) => {
         success: true,
         message: "Quantity increased",
         quantity: newQty,
-        size: current.size
+        size: current.size,
+        owner: product.owner || null  // <-- ADDED
       });
     }
 
     if (action === "decrease") {
       if (current.quantity === 1) {
         await User.findByIdAndUpdate(userId, { $unset: { [`cartData.${itemId}`]: "" } });
-        return res.json({ success: true, message: "Item removed from cart", quantity: 0 });
+        return res.json({
+          success: true,
+          message: "Item removed from cart",
+          quantity: 0,
+          owner: product.owner || null    // <-- ADDED
+        });
       }
 
       const newQty = current.quantity - 1;
@@ -155,7 +175,8 @@ const modifyCartQuantity = async (req, res) => {
         success: true,
         message: "Quantity decreased",
         quantity: newQty,
-        size: current.size
+        size: current.size,
+        owner: product.owner || null      // <-- ADDED
       });
     }
   } catch (err) {
@@ -164,6 +185,7 @@ const modifyCartQuantity = async (req, res) => {
 };
 
 
+// ========================= REMOVE =========================
 const removeFromCart = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -172,10 +194,12 @@ const removeFromCart = async (req, res) => {
     if (!itemId) return res.status(400).json({ error: true, message: "itemId required" });
 
     await User.findByIdAndUpdate(userId, { $unset: { [`cartData.${itemId}`]: "" } });
+
     res.json({ success: true, message: "Item removed from cart" });
   } catch (err) {
     res.status(500).json({ error: true, message: err.message });
   }
 };
+
 
 export { getUserCart, modifyCartQuantity, removeFromCart, addToCart };

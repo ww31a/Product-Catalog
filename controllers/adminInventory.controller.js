@@ -3,12 +3,10 @@ import stockHistory from '../models/stockHistory.module.js'
 import Order from '../models/order.module.js'
 import mongoose from 'mongoose'
 
-
 const getAdminProductIds = async (adminId) => {
   const products = await Product.find({ owner: adminId }).select('_id')
   return products.map(p => p._id)
 }
-
 
 export const getBestSellingProducts = async (req, res) => {
   try {
@@ -22,25 +20,15 @@ export const getBestSellingProducts = async (req, res) => {
     const adminProductIds = await getAdminProductIds(adminId)
 
     const bestSellers = await Order.aggregate([
-      {
-        $match: {
-          status: 'delivered',
-          createdAt: { $gte: dateThreshold }
-        }
-      },
+      { $match: { status: 'delivered', createdAt: { $gte: dateThreshold } } },
       { $unwind: '$items' },
-      {
-        $match: {
-          'items._id': { $in: adminProductIds.map(id => id.toString()) }
-        }
-      },
-      {
-        $group: {
+      { $match: { 'items._id': { $in: adminProductIds.map(id => id.toString()) } } },
+      { $group: {
           _id: '$items._id',
           totalSold: { $sum: '$items.quantity' },
           salesCount: { $sum: 1 },
           totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
-        }
+        } 
       },
       { $sort: { totalSold: -1 } },
       { $limit: limit }
@@ -49,7 +37,9 @@ export const getBestSellingProducts = async (req, res) => {
     const productIds = bestSellers.map(item => item._id)
     
     const products = await Product.find({ _id: { $in: productIds }, owner: adminId })
-      .select('title brand price stock image')
+      .select('title brand price stock image category')
+      .populate('category', 'name')  // <-- new
+      .populate('owner', 'name email')
 
     const result = bestSellers.map(seller => {
       const product = products.find(p => p._id.toString() === seller._id.toString())
@@ -60,7 +50,8 @@ export const getBestSellingProducts = async (req, res) => {
           brand: product?.brand,
           price: product?.price,
           stock: product?.stock,
-          image: product?.image
+          image: product?.image,
+          category: product?.category?.name  // <-- new
         },
         totalSold: seller.totalSold,
         salesCount: seller.salesCount,
@@ -88,7 +79,10 @@ export const getLowStockAlert = async (req,res) => {
     const products = await Product.find({
       owner: adminId,
       stock: { $gt: 0, $lte: threshold }
-    }).populate('owner','name email').sort({stock:1})
+    })
+    .populate('owner','name email')
+    .populate('category','name') // <-- new
+    .sort({stock:1})
 
     res.json({ success: true, data: { threshold, count: products.length, products } })
   } catch(err) {
@@ -96,13 +90,13 @@ export const getLowStockAlert = async (req,res) => {
   }
 }
 
-
 export const getOutOfStockAlert = async (req,res) => {
   try {
     const adminId = req.user.id
 
     const products = await Product.find({ owner: adminId, stock: 0 })
       .populate('owner','name email')
+      .populate('category','name') // <-- new
       .sort({ updatedAt: -1 })
 
     res.json({ success:true, data: { count: products.length, products } })
@@ -111,7 +105,6 @@ export const getOutOfStockAlert = async (req,res) => {
   }
 }
 
-
 export const getInStockAlert = async (req, res) => {
   try {
     const adminId = req.user.id
@@ -119,6 +112,7 @@ export const getInStockAlert = async (req, res) => {
 
     const products = await Product.find({ owner: adminId, stock: { $gt: threshold } })
       .populate('owner','name email')
+      .populate('category','name') // <-- new
       .sort({ stock: -1 })
 
     res.json({ success: true, data: { threshold, count: products.length, products } })
@@ -126,7 +120,6 @@ export const getInStockAlert = async (req, res) => {
     res.status(500).json({ success:false, message: error.message })
   }
 }
-
 
 export const getStockSummary = async (req, res) => {
   try {
@@ -187,7 +180,10 @@ export const getDeadStock = async (req,res) => {
     const deadStockProducts = await Product.find({
       _id: { $in: adminProductIds, $nin: recentlyChangedProducts },
       stock: { $gt: 0 }
-    }).populate('owner','name email').sort({ updatedAt: 1 })
+    })
+    .populate('owner','name email')
+    .populate('category','name') // <-- new
+    .sort({ updatedAt: 1 })
 
     const deadStockValue = deadStockProducts.reduce((sum, product) => sum + product.price * product.stock, 0)
 

@@ -14,21 +14,22 @@ const productSchema = new mongoose.Schema({
         required: true
     },
     category: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category",
         required: true
     },
     sizes: {
         type: [String],
-        required:false,
-        default:undefined
+        required: false,
+        default: undefined
     },
     description: {
         type: String,
         required: true
     },
     image: {
-        type: String, 
-        required:true
+        type: String,
+        required: true
     },
     stock: {
         type: Number,

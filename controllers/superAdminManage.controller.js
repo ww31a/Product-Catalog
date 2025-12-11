@@ -299,16 +299,23 @@ export const getAllProducts = async (req, res) => {
         const { search, category, page = 1, limit = 10 } = req.query;
 
         const query = {};
+
+        // Search filter (title + brand)
         if (search) {
             query.$or = [
                 { title: { $regex: search, $options: "i" } },
                 { brand: { $regex: search, $options: "i" } }
             ];
         }
-        if (category) query.category = category;
+
+        // Category filter (ObjectId)
+        if (category && mongoose.Types.ObjectId.isValid(category)) {
+            query.category = category;
+        }
 
         const products = await Product.find(query)
             .populate("owner", "name email")
+            .populate("category", "name") // NEW
             .sort({ createdAt: -1 })
             .limit(limit * 1)
             .skip((page - 1) * limit);
@@ -330,12 +337,13 @@ export const getAllProducts = async (req, res) => {
 };
 
 
+
 export const getAllOrders = async (req, res) => {
     try {
         const { status, search, page = 1, limit = 10 } = req.query;
 
         const query = {};
-        
+
         // Filter by status
         if (status) {
             query.status = status;

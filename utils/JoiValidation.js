@@ -105,6 +105,8 @@ const orderSchema = Joi.object({
         })
 });
 
+const objectId = Joi.string().regex(/^[0-9a-fA-F]{24}$/).message("Invalid category ID");
+
 const productSchema = Joi.object({
     title: Joi.string()
         .min(2)
@@ -141,14 +143,9 @@ const productSchema = Joi.object({
             "any.required": "Brand is required",
         }),
 
-    category: Joi.string()
-        .valid("clothing", "electronics", "footwear", "bag", "grocery")
-        .required()
-        .messages({
-            "any.required": "Category is required",
-            "any.only": "Category must be one of: Clothing, Electronics, Footwear, Bag, Grocery",
-            "string.base": "Category must be a string",
-        }),
+    category: objectId.required().messages({
+        "any.required": "Category is required",
+    }),
 
 
     description: Joi.string()
@@ -217,13 +214,9 @@ const updateProductSchema = Joi.object({
             "string.max": "Brand cannot exceed 50 characters",
         }),
 
-    category: Joi.string()
-        .valid("clothing", "electronics", "footwear", "bag", "grocery")
-        .optional()
-        .messages({
-            "any.only": "Category must be one of: Clothing, Electronics, Footwear, Bag, Grocery",
-            "string.base": "Category must be a string",
-        }),
+    category: objectId.required().messages({
+        "any.required": "Category is required",
+    }),
 
     description: Joi.string()
         .min(5)

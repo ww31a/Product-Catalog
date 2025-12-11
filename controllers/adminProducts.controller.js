@@ -12,7 +12,9 @@ export const getAdminProducts = async (req, res) => {
       return res.status(400).json({ message: "Invalid admin ID" });
     }
 
-    const products = await Product.find({ owner: adminId });
+    const products = await Product.find({ owner: adminId })
+      .populate("category", "name"); // NEW
+
     return res.status(200).json({ products });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -31,7 +33,9 @@ export const getAdminProductByID = async (req, res) => {
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    const product = await Product.findOne({ _id: id, owner: adminId });
+    const product = await Product.findOne({ _id: id, owner: adminId })
+      .populate("category", "name"); // NEW
+
     if (!product) {
       return res.status(404).json({ message: "Product not found or not owned by you" });
     }
@@ -51,6 +55,11 @@ export const addProduct = async (req, res) => {
 
     if (!req.file?.path) {
       return res.status(400).json({ message: "Image is required" });
+    }
+
+    // VALIDATE category ID (NEW)
+    if (!mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({ message: "Invalid category ID" });
     }
 
     // Parse sizes
@@ -77,7 +86,7 @@ export const addProduct = async (req, res) => {
       owner: req.user.id
     });
 
-    // ✔ Create initial stock history (only if stock > 0)
+    // Initial stock history
     if (product.stock > 0) {
       await stockHistory.create({
         productId: product._id,
@@ -117,6 +126,13 @@ export const updateProduct = async (req, res) => {
     const updatedData = { ...req.body };
     if (req.file) updatedData.image = req.file.path;
 
+    // VALIDATE category if updating (NEW)
+    if (updatedData.category) {
+      if (!mongoose.Types.ObjectId.isValid(updatedData.category)) {
+        return res.status(400).json({ message: "Invalid category ID" });
+      }
+    }
+
     // Parse and validate sizes
     if (updatedData.sizes) {
       const parsedSizes = typeof updatedData.sizes === "string"
@@ -132,15 +148,15 @@ export const updateProduct = async (req, res) => {
     }
 
 
-    // 🟨 CHECK IF STOCK IS BEING CHANGED
+    // STOCK CHANGE CHECK
     let previousStock = Number(existingProduct.stock);
     let newStock = updatedData.stock !== undefined
       ? Number(updatedData.stock)
       : undefined;
 
-    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true });
+    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true })
+      .populate("category", "name"); // NEW
 
-    // 🟦 ONLY LOG HISTORY IF STOCK ACTUALLY CHANGED
     if (newStock !== undefined && previousStock !== newStock) {
       const change = newStock - previousStock;
 
@@ -164,6 +180,7 @@ export const updateProduct = async (req, res) => {
 };
 
 
+
 // DELETE product – also delete associated stock history
 export const deleteProduct = async (req, res) => {
   try {
@@ -179,7 +196,6 @@ export const deleteProduct = async (req, res) => {
       return res.status(404).json({ message: "Product not found or not owned by you" });
     }
 
-    // ✅ Delete all stock history for this product
     await stockHistory.deleteMany({ productId: id });
 
     res.status(200).json({
@@ -218,21 +234,19 @@ export const bulkDeleteProducts = async (req, res) => {
       return res.status(404).json({ message: "No products deleted. Make sure they exist and belong to you." });
     }
 
-    // ✅ Delete all stock history for these products
-    const historyResult = await stockHistory.deleteMany({
-      productId: { $in: productIds }
-    });
+    await stockHistory.deleteMany({ productId: { $in: productIds } });
 
     res.status(200).json({
       message: `${result.deletedCount} product(s) deleted successfully`,
-      deletedCount: result.deletedCount,
-      stockHistoryDeleted: historyResult.deletedCount
+      deletedCount: result.deletedCount
     });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+
 
 export const updateStock = async (req, res) => {
   try {
@@ -259,7 +273,9 @@ export const updateStock = async (req, res) => {
       id,
       { stock: newStock },
       { new: true }
-    ).populate('owner', 'name email');
+    )
+      .populate("category", "name") // NEW
+      .populate('owner', 'name email');
 
     if (previousStock !== newStock) {
       const change = newStock - previousStock;
@@ -273,12 +289,12 @@ export const updateStock = async (req, res) => {
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: adminId,
         notes: "Quick stock change from seller stock page"
-      })
+      });
     }
-    if (updatedProduct.stock == newStock) {
-      return res.status(200).json({ success: true, message: "Stock Updated Succesfully" })
-    }
+
+    return res.status(200).json({ success: true, message: "Stock Updated Successfully" });
+
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })
   }
-}
+};
