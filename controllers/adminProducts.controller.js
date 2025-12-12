@@ -233,7 +233,7 @@ export const bulkDeleteProducts = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
+//update stock
 export const updateStock = async (req, res) => {
   try {
     const { id } = req.params;
