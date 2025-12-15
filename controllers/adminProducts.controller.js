@@ -9,13 +9,13 @@ export const getAdminProducts = async (req, res) => {
     const adminId = req.user?.id;
 
     if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
-      return res.status(400).json({ message: "Invalid admin ID" });
+      return res.status(400).json({ success: false, message: "Invalid admin ID" });
     }
 
     const products = await Product.find({ owner: adminId });
-    return res.status(200).json({ products });
+    return res.status(200).json({ success: true, products });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -28,17 +28,17 @@ export const getAdminProductByID = async (req, res) => {
     const adminId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
     const product = await Product.findOne({ _id: id, owner: adminId });
     if (!product) {
-      return res.status(404).json({ message: "Product not found or not owned by you" });
+      return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
 
-    res.status(200).json(product);
+    res.status(200).json({ success: true, product });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -50,7 +50,7 @@ export const addProduct = async (req, res) => {
     const { title, description, stock, price, brand, category, sizes } = req.body;
 
     if (!req.file?.path) {
-      return res.status(400).json({ message: "Image is required" });
+      return res.status(400).json({ success: false, message: "Image is required" });
     }
 
     // Parse sizes
@@ -60,7 +60,7 @@ export const addProduct = async (req, res) => {
 
       for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
-          return res.status(400).json({ message: "sizes must be one of: S, M, L, XL" });
+          return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL" });
         }
       }
     }
@@ -91,9 +91,9 @@ export const addProduct = async (req, res) => {
       });
     }
 
-    res.status(201).json(product);
+    res.status(201).json({ success: true, product });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -106,12 +106,12 @@ export const updateProduct = async (req, res) => {
     const adminId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
     const existingProduct = await Product.findOne({ _id: id, owner: adminId });
     if (!existingProduct) {
-      return res.status(404).json({ message: "Product not found or not owned by you" });
+      return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
 
     const updatedData = { ...req.body };
@@ -125,7 +125,7 @@ export const updateProduct = async (req, res) => {
 
       for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
-          return res.status(400).json({ message: "sizes must be one of: S, M, L, XL" });
+          return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL" });
         }
       }
       updatedData.sizes = parsedSizes;
@@ -156,10 +156,10 @@ export const updateProduct = async (req, res) => {
       });
     }
 
-    res.status(200).json(updatedProduct);
+    res.status(200).json({ success: true, product: updatedProduct });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -171,24 +171,25 @@ export const deleteProduct = async (req, res) => {
     const adminId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
     const product = await Product.findOneAndDelete({ _id: id, owner: adminId });
     if (!product) {
-      return res.status(404).json({ message: "Product not found or not owned by you" });
+      return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
 
     // ✅ Delete all stock history for this product
     await stockHistory.deleteMany({ productId: id });
 
     res.status(200).json({
+      success: true,
       message: "Product and its stock history deleted successfully",
       product
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -201,12 +202,12 @@ export const bulkDeleteProducts = async (req, res) => {
     const { productIds } = req.body;
 
     if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({ message: "productIds must be a non-empty array" });
+      return res.status(400).json({ success: false, message: "productIds must be a non-empty array" });
     }
 
     const invalidIds = productIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
     if (invalidIds.length > 0) {
-      return res.status(400).json({ message: `Invalid product IDs: ${invalidIds.join(", ")}` });
+      return res.status(400).json({ success: false, message: `Invalid product IDs: ${invalidIds.join(", ")}` });
     }
 
     const result = await Product.deleteMany({
@@ -215,7 +216,7 @@ export const bulkDeleteProducts = async (req, res) => {
     });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ message: "No products deleted. Make sure they exist and belong to you." });
+      return res.status(404).json({ success: false, message: "No products deleted. Make sure they exist and belong to you." });
     }
 
     // ✅ Delete all stock history for these products
@@ -224,13 +225,14 @@ export const bulkDeleteProducts = async (req, res) => {
     });
 
     res.status(200).json({
+      success: true,
       message: `${result.deletedCount} product(s) deleted successfully`,
       deletedCount: result.deletedCount,
       stockHistoryDeleted: historyResult.deletedCount
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 //update stock
