@@ -1,34 +1,34 @@
 import Order from "../models/order.module.js";
 import Product from "../models/products.module.js";
 
-export const getAdminOrders = async (req, res) => {
+export const getSellerOrders = async (req, res) => {
     try {
-        const adminId = req.user.id;
+        const sellerId = req.user.id;
 
-        // Step 1: Get product IDs owned by this admin
-        const products = await Product.find({ owner: adminId }).select("_id");
+        // Step 1: Get product IDs owned by this seller
+        const products = await Product.find({ owner: sellerId }).select("_id");
         const ownedIds = products.map(p => p._id.toString());
 
-        // Step 2: Fetch all orders that contain any of this admin’s products
+        // Step 2: Fetch all orders that contain any of this seller’s products
         const orders = await Order.find({
             "items._id": { $in: ownedIds }
         }).sort({ createdAt: -1 });   // ⬅️ sorting added here
 
-        // Step 3: Filter items + recalculate amount ONLY for admin's products
+        // Step 3: Filter items + recalculate amount ONLY for seller's products
         const filteredOrders = orders.map(order => {
             const filteredItems = order.items.filter(item =>
                 ownedIds.includes(item._id.toString())
             );
 
-            // Recalculate amount for admin-only products
-            const adminAmount = filteredItems.reduce((sum, item) => {
+            // Recalculate amount for seller-only products
+            const sellerAmount = filteredItems.reduce((sum, item) => {
                 return sum + (item.price * item.quantity);
             }, 0);
 
             return {
                 ...order.toObject(),
                 items: filteredItems,
-                amount: adminAmount
+                amount: sellerAmount
             };
         });
 
@@ -43,7 +43,7 @@ export const getAdminOrders = async (req, res) => {
 
 export const updateOrderStatus = async (req, res) => {
   try {
-    const adminId = req.user.id;
+    const sellerId = req.user.id;
     const { orderId, status } = req.body;
 
     const order = await Order.findById(orderId);
@@ -55,8 +55,8 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    const adminProducts = await Product.find({ owner: adminId }).select("_id");
-    const ownedIds = adminProducts.map(p => p._id.toString());
+    const sellerProducts = await Product.find({ owner: sellerId }).select("_id");
+    const ownedIds = sellerProducts.map(p => p._id.toString());
 
     const hasProduct = order.items.some(item =>
       ownedIds.includes(item._id.toString())

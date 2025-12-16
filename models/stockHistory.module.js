@@ -30,7 +30,7 @@ const stockHistorySchema = new mongoose.Schema({
     },
     changedBy:{
         type:mongoose.Schema.Types.ObjectId,
-        ref:"Admin",
+        ref:"Seller",
         required:true
     },
     orderId:{

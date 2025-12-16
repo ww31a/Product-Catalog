@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-export const verifyAdmin = (req, res, next) => {
+export const verifySeller = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -11,8 +11,8 @@ export const verifyAdmin = (req, res, next) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (decoded.role !== "admin") {
-      return res.status(403).json({ message: "Access denied: Admin only" });
+    if (decoded.role !== "seller") {
+      return res.status(403).json({ message: "Access denied: seller only" });
     }
 
     req.user = decoded;

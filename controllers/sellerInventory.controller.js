@@ -1,25 +1,24 @@
 import Product from '../models/products.module.js'
 import stockHistory from '../models/stockHistory.module.js'
 import Order from '../models/order.module.js'
-import mongoose from 'mongoose'
 
 
-const getAdminProductIds = async (adminId) => {
-  const products = await Product.find({ owner: adminId }).select('_id')
+const getSellerProductIds = async (sellerId) => {
+  const products = await Product.find({ owner: sellerId }).select('_id')
   return products.map(p => p._id)
 }
 
 
 export const getBestSellingProducts = async (req, res) => {
   try {
-    const adminId = req.user.id
+    const sellerId = req.user.id
     const days = parseInt(req.query.days) || 30
     const limit = parseInt(req.query.limit) || 10
     
     const dateThreshold = new Date()
     dateThreshold.setDate(dateThreshold.getDate() - days)
 
-    const adminProductIds = await getAdminProductIds(adminId)
+    const sellerProductIds = await getSellerProductIds(sellerId)
 
     const bestSellers = await Order.aggregate([
       {
@@ -31,7 +30,7 @@ export const getBestSellingProducts = async (req, res) => {
       { $unwind: '$items' },
       {
         $match: {
-          'items._id': { $in: adminProductIds.map(id => id.toString()) }
+          'items._id': { $in: sellerProductIds.map(id => id.toString()) }
         }
       },
       {
@@ -48,7 +47,7 @@ export const getBestSellingProducts = async (req, res) => {
 
     const productIds = bestSellers.map(item => item._id)
     
-    const products = await Product.find({ _id: { $in: productIds }, owner: adminId })
+    const products = await Product.find({ _id: { $in: productIds }, owner: sellerId })
       .select('title brand price stock image')
 
     const result = bestSellers.map(seller => {
@@ -82,11 +81,11 @@ export const getBestSellingProducts = async (req, res) => {
 
 export const getLowStockAlert = async (req,res) => {
   try {
-    const adminId = req.user.id
+    const sellerId = req.user.id
     const threshold = 5
 
     const products = await Product.find({
-      owner: adminId,
+      owner: sellerId,
       stock: { $gt: 0, $lte: threshold }
     }).populate('owner','name email').sort({stock:1})
 
@@ -99,9 +98,9 @@ export const getLowStockAlert = async (req,res) => {
 
 export const getOutOfStockAlert = async (req,res) => {
   try {
-    const adminId = req.user.id
+    const sellerId = req.user.id
 
-    const products = await Product.find({ owner: adminId, stock: 0 })
+    const products = await Product.find({ owner: sellerId, stock: 0 })
       .populate('owner','name email')
       .sort({ updatedAt: -1 })
 
@@ -114,10 +113,10 @@ export const getOutOfStockAlert = async (req,res) => {
 
 export const getInStockAlert = async (req, res) => {
   try {
-    const adminId = req.user.id
+    const sellerId = req.user.id
     const threshold = 5
 
-    const products = await Product.find({ owner: adminId, stock: { $gt: threshold } })
+    const products = await Product.find({ owner: sellerId, stock: { $gt: threshold } })
       .populate('owner','name email')
       .sort({ stock: -1 })
 
@@ -130,16 +129,16 @@ export const getInStockAlert = async (req, res) => {
 
 export const getStockSummary = async (req, res) => {
   try {
-    const adminId = req.user.id
+    const sellerId = req.user.id
     const threshold = 5
 
-    const totalProducts = await Product.countDocuments({ owner: adminId })
-    const outOfStock = await Product.countDocuments({ owner: adminId, stock: 0 })
-    const lowStock = await Product.countDocuments({ owner: adminId, stock: { $gt: 0, $lte: threshold } })
-    const inStock = await Product.countDocuments({ owner: adminId, stock: { $gt: threshold } })
+    const totalProducts = await Product.countDocuments({ owner: sellerId })
+    const outOfStock = await Product.countDocuments({ owner: sellerId, stock: 0 })
+    const lowStock = await Product.countDocuments({ owner: sellerId, stock: { $gt: 0, $lte: threshold } })
+    const inStock = await Product.countDocuments({ owner: sellerId, stock: { $gt: threshold } })
 
     const valueResult = await Product.aggregate([
-      { $match: { owner: adminId } },
+      { $match: { owner: sellerId } },
       { $group: {
           _id: null,
           totalValue: { $sum: { $multiply: ["$price", "$stock"] } },
@@ -150,11 +149,11 @@ export const getStockSummary = async (req, res) => {
 
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    const adminProductIds = await getAdminProductIds(adminId)
+    const sellerProductIds = await getSellerProductIds(sellerId)
 
-    const recentChanges = await stockHistory.countDocuments({ productId: { $in: adminProductIds }, createdAt: { $gte: sevenDaysAgo } })
-    const recentIncreases = await stockHistory.countDocuments({ productId: { $in: adminProductIds }, type: 'add', createdAt: { $gte: sevenDaysAgo } })
-    const recentDecreases = await stockHistory.countDocuments({ productId: { $in: adminProductIds }, type: 'remove', createdAt: { $gte: sevenDaysAgo } })
+    const recentChanges = await stockHistory.countDocuments({ productId: { $in: sellerProductIds }, createdAt: { $gte: sevenDaysAgo } })
+    const recentIncreases = await stockHistory.countDocuments({ productId: { $in: sellerProductIds }, type: 'add', createdAt: { $gte: sevenDaysAgo } })
+    const recentDecreases = await stockHistory.countDocuments({ productId: { $in: sellerProductIds }, type: 'remove', createdAt: { $gte: sevenDaysAgo } })
 
     res.json({
       success:true,
@@ -172,20 +171,20 @@ export const getStockSummary = async (req, res) => {
 
 export const getDeadStock = async (req,res) => {
   try {
-    const adminId = req.user.id
+    const sellerId = req.user.id
     const days = parseInt(req.query.days) || 20
     const dateThreshold = new Date()
     dateThreshold.setDate(dateThreshold.getDate() - days)
 
-    const adminProductIds = await getAdminProductIds(adminId)
+    const sellerProductIds = await getsellerProductIds(sellerId)
 
     const recentlyChangedProducts = await stockHistory.distinct('productId', {
-      productId: { $in: adminProductIds },
+      productId: { $in: sellerProductIds },
       createdAt: { $gte: dateThreshold }
     })
 
     const deadStockProducts = await Product.find({
-      _id: { $in: adminProductIds, $nin: recentlyChangedProducts },
+      _id: { $in: sellerProductIds, $nin: recentlyChangedProducts },
       stock: { $gt: 0 }
     }).populate('owner','name email').sort({ updatedAt: 1 })
 

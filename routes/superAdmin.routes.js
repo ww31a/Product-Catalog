@@ -1,8 +1,8 @@
 import { Router } from "express";
 import limiter from "../middlewares/ratelimit.js";
-import { getAllAdmins,deleteAdmin,getPlatformOverview,getTopSellers,getAllUsers,
+import { getAllSellers,deleteSeller,getPlatformOverview,getTopSellers,getAllUsers,
     getAllProducts,getAllOrders,
-    bulkDeleteAdmins
+    bulkDeleteSellers
  } from "../controllers/superAdminManage.controller.js";
 
 import { getSuperAdminProfile,changePassword,superAdminLogin } from "../controllers/superAdminAuth.controller.js";
@@ -16,15 +16,15 @@ const superAdminRouter = Router();
 superAdminRouter.get("/profile", verifySuperAdmin, getSuperAdminProfile);
 superAdminRouter.put("/change-password", verifySuperAdmin,validateBody(passwordSchema), changePassword);
 
-superAdminRouter.get('/all-admins',verifySuperAdmin,getAllAdmins);
+superAdminRouter.get('/all-sellers',verifySuperAdmin,getAllSellers);
 superAdminRouter.get('/all-users',verifySuperAdmin,getAllUsers);
 superAdminRouter.get('/all-products',verifySuperAdmin,getAllProducts);
 superAdminRouter.get('/all-orders',verifySuperAdmin,getAllOrders);
 superAdminRouter.get('/overview',verifySuperAdmin,getPlatformOverview);
-superAdminRouter.get('/top-sellers',verifySuperAdmin,getTopSellers);
+superAdminRouter.get('/top-sellers',verifySuperAdmin,getTopSellers); //not used
 
-superAdminRouter.delete('/delete-admin/:adminId',verifySuperAdmin,deleteAdmin);
-superAdminRouter.post('/bulk-delete',verifySuperAdmin,bulkDeleteAdmins);
+superAdminRouter.delete('/delete-seller/:sellerId',verifySuperAdmin,deleteSeller); //not used
+superAdminRouter.post('/bulk-delete-seller',verifySuperAdmin,bulkDeleteSellers); //not useed
 
 // Public route
 superAdminRouter.post("/login",limiter, superAdminLogin);

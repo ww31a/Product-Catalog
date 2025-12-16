@@ -3,16 +3,16 @@ import Product from '../models/products.module.js';
 import stockHistory from "../models/stockHistory.module.js";
 
 
-// GET all admin products
-export const getAdminProducts = async (req, res) => {
+// GET all seller products
+export const getSellerProducts = async (req, res) => {
   try {
-    const adminId = req.user?.id;
+    const sellerId = req.user?.id;
 
-    if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
-      return res.status(400).json({ success: false, message: "Invalid admin ID" });
+    if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
+      return res.status(400).json({ success: false, message: "Invalid seller ID" });
     }
 
-    const products = await Product.find({ owner: adminId });
+    const products = await Product.find({ owner: sellerId });
     return res.status(200).json({ success: true, products });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -22,16 +22,16 @@ export const getAdminProducts = async (req, res) => {
 
 
 // GET a single product by ID
-export const getAdminProductByID = async (req, res) => {
+export const getSellerProductByID = async (req, res) => {
   try {
     const { id } = req.params;
-    const adminId = req.user?.id;
+    const sellerId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
-    const product = await Product.findOne({ _id: id, owner: adminId });
+    const product = await Product.findOne({ _id: id, owner: sellerId });
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
@@ -103,13 +103,13 @@ export const addProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const adminId = req.user?.id;
+    const sellerId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
-    const existingProduct = await Product.findOne({ _id: id, owner: adminId });
+    const existingProduct = await Product.findOne({ _id: id, owner: sellerId });
     if (!existingProduct) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
@@ -151,7 +151,7 @@ export const updateProduct = async (req, res) => {
         change,
         type: change > 0 ? "add" : "remove",
         reason: change > 0 ? "restock" : "adjustment",
-        changedBy: adminId,
+        changedBy: sellerId,
         notes: `Stock ${change > 0 ? 'increased' : 'decreased'} by ${Math.abs(change)}`
       });
     }
@@ -168,13 +168,13 @@ export const updateProduct = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const adminId = req.user?.id;
+    const sellerId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
-    const product = await Product.findOneAndDelete({ _id: id, owner: adminId });
+    const product = await Product.findOneAndDelete({ _id: id, owner: sellerId });
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
@@ -198,7 +198,7 @@ export const deleteProduct = async (req, res) => {
 // BULK DELETE – also delete associated stock history
 export const bulkDeleteProducts = async (req, res) => {
   try {
-    const adminId = req.user?.id;
+    const sellerId = req.user?.id;
     const { productIds } = req.body;
 
     if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -212,7 +212,7 @@ export const bulkDeleteProducts = async (req, res) => {
 
     const result = await Product.deleteMany({
       _id: { $in: productIds },
-      owner: adminId
+      owner: sellerId
     });
 
     if (result.deletedCount === 0) {
@@ -240,7 +240,7 @@ export const updateStock = async (req, res) => {
   try {
     const { id } = req.params;
     const { stock } = req.body;
-    const adminId = req.user.id;
+    const sellerId = req.user.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" })
@@ -249,7 +249,7 @@ export const updateStock = async (req, res) => {
       return res.status(400).json({ success: false, message: "Stock must be non-negative" })
     }
 
-    const existingProduct = await Product.findOne({ _id: id, owner: adminId });
+    const existingProduct = await Product.findOne({ _id: id, owner: sellerId });
     if (!existingProduct) {
       return res.status(400).json({ success: false, message: "Product does not exist" });
     }
@@ -273,7 +273,7 @@ export const updateStock = async (req, res) => {
         change,
         type: change > 0 ? "add" : "remove",
         reason: change > 0 ? "restock" : "adjustment",
-        changedBy: adminId,
+        changedBy: sellerId,
         notes: "Quick stock change from seller stock page"
       })
     }

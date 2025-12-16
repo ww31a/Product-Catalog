@@ -8,7 +8,7 @@ import connectDB from './database/mongodb.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import productrouter from './routes/products.routes.js';
-import adminAuthRouter from './routes/adminAuth.routes.js';
+import sellerAuthRouter from './routes/sellerAuth.routes.js';
 import userAuthRouter from './routes/userAuth.routes.js'
 import cookieParser from 'cookie-parser';
 import cartRouter from './routes/cart.routes.js';
@@ -48,7 +48,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 app.use('/api/products', productrouter);
-app.use('/api/admin/auth', adminAuthRouter);
+app.use('/api/seller/auth', sellerAuthRouter);
 app.use('/api/user/auth',userAuthRouter)
 app.use('/api/cart',cartRouter)
 app.use('/api/order',orderRouter)

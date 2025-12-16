@@ -1,28 +1,28 @@
-import Admin from "../models/admin.module.js";
+import Seller from "../models/seller.module.js";
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js'
 
 
-export const adminRegister = async (req, res) => {
+export const sellerRegister = async (req, res) => {
   try {
     const { name, password } = req.body;
     const email = req.body.email.toLowerCase();
 
 
-    const exists = await Admin.findOne({ email });
+    const exists = await Seller.findOne({ email });
     if (exists)
-      return res.status(400).json({ message: "Admin already exists" });
+      return res.status(400).json({ message: "seller already exists" });
 
     const hash = await bcrypt.hash(password, 10);
 
-    await Admin.create({
+    await Seller.create({
       name,
       email,
       password: hash,
     });
 
     res.status(201).json({
-      message: "Admin registered successfully. Please login to continue.",
+      message: "seller registered successfully. Please login to continue.",
     });
 
   } catch (err) {
@@ -32,30 +32,30 @@ export const adminRegister = async (req, res) => {
 
 
 
-export const adminLogin = async (req, res) => {
+export const sellerLogin = async (req, res) => {
   try {
     const { password } = req.body;
     const email = req.body.email.toLowerCase();
 
 
-    const admin = await Admin.findOne({ email });
-    if (!admin)
-      return res.status(404).json({ message: "Admin not found" });
+    const seller = await Seller.findOne({ email });
+    if (!seller)
+      return res.status(404).json({ message: "seller not found" });
 
-    const match = await bcrypt.compare(password, admin.password);
+    const match = await bcrypt.compare(password, seller.password);
     if (!match)
       return res.status(400).json({ message: "Invalid credentials" });
 
     const token = generateToken({
-      id: admin._id,
-      role: "admin",
+      id: seller._id,
+      role: "seller",
     });
 
     res.status(200).json({
       message: "Login successful",
       token,
-      role: "admin",
-      name: admin.name
+      role: "seller",
+      name: seller.name
     });
 
   } catch (err) {

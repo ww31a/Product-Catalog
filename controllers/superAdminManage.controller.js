@@ -1,4 +1,4 @@
-import Admin from "../models/admin.module.js";
+import Seller from "../models/seller.module.js";
 import Product from "../models/products.module.js";
 import Order from "../models/order.module.js";
 import User from "../models/user.module.js";
@@ -6,7 +6,7 @@ import stockHistory from "../models/stockHistory.module.js";
 import mongoose from "mongoose";
 
 
-export const getAllAdmins = async (req, res) => {
+export const getAllSellers = async (req, res) => {
     try {
         const { status, search, page = 1, limit = 10 } = req.query;
 
@@ -19,18 +19,18 @@ export const getAllAdmins = async (req, res) => {
             ];
         }
 
-        const admins = await Admin.find(query)
+        const sellers = await Seller.find(query)
             .select("-password")
             .sort({ createdAt: -1 })
             .limit(limit * 1)
             .skip((page - 1) * limit);
 
-        const count = await Admin.countDocuments(query);
+        const count = await Seller.countDocuments(query);
 
         res.json({
             success: true,
             data: {
-                admins,
+                sellers,
                 totalPages: Math.ceil(count / limit),
                 currentPage: Number(page),
                 total: count
@@ -42,83 +42,83 @@ export const getAllAdmins = async (req, res) => {
 };
 
 
-export const deleteAdmin = async (req, res) => {
+export const deleteSeller = async (req, res) => {
     try {
-        const { adminId } = req.params;
+        const { sellerId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(adminId)) {
+        if (!mongoose.Types.ObjectId.isValid(sellerId)) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid admin ID"
+                message: "Invalid seller ID"
             });
         }
 
-        const admin = await Admin.findByIdAndDelete(adminId);
-        if (!admin) {
+        const seller = await Seller.findByIdAndDelete(sellerId);
+        if (!seller) {
             return res.status(404).json({
                 success: false,
-                message: "Admin not found"
+                message: "Seller not found"
             });
         }
 
-        const adminProducts = await Product.find({ owner: adminId }).select("_id");
-        const productIds = adminProducts.map(p => p._id);
+        const sellerProducts = await Product.find({ owner: sellerId }).select("_id");
+        const productIds = sellerProducts.map(p => p._id);
 
         await stockHistory.deleteMany({ productId: { $in: productIds } });
 
-        await Product.deleteMany({ owner: adminId });
+        await Product.deleteMany({ owner: sellerId });
 
         res.json({
             success: true,
-            message: "Admin and associated data deleted successfully"
+            message: "Seller and associated data deleted successfully"
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-export const bulkDeleteAdmins = async (req, res) => {
+export const bulkDeleteSellers = async (req, res) => {
     try {
-        const { adminIds } = req.body; // Expecting an array of admin IDs
+        const { sellerIds } = req.body; // Expecting an array of seller IDs
 
-        if (!Array.isArray(adminIds) || adminIds.length === 0) {
+        if (!Array.isArray(sellerIds) || sellerIds.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: "Please provide an array of admin IDs"
+                message: "Please provide an array of seller IDs"
             });
         }
 
         // Validate all IDs
-        const invalidIds = adminIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+        const invalidIds = sellerIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
         if (invalidIds.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid admin IDs found",
+                message: "Invalid seller IDs found",
                 invalidIds
             });
         }
 
-        // Delete admins
-        const deleteResult = await Admin.deleteMany({ _id: { $in: adminIds } });
+        // Delete sellers
+        const deleteResult = await Seller.deleteMany({ _id: { $in: sellerIds } });
 
         if (deleteResult.deletedCount === 0) {
             return res.status(404).json({
                 success: false,
-                message: "No admins found with provided IDs"
+                message: "No sellers found with provided IDs"
             });
         }
 
-        // Get all products owned by these admins
-        const adminProducts = await Product.find({ owner: { $in: adminIds } }).select("_id");
-        const productIds = adminProducts.map(p => p._id);
+        // Get all products owned by these sellers
+        const sellerProducts = await Product.find({ owner: { $in: sellerIds } }).select("_id");
+        const productIds = sellerProducts.map(p => p._id);
 
         // Delete stock history and products
         await stockHistory.deleteMany({ productId: { $in: productIds } });
-        await Product.deleteMany({ owner: { $in: adminIds } });
+        await Product.deleteMany({ owner: { $in: sellerIds } });
 
         res.json({
             success: true,
-            message: `${deleteResult.deletedCount} admin(s) and associated data deleted successfully`,
+            message: `${deleteResult.deletedCount} seller(s) and associated data deleted successfully`,
             deletedCount: deleteResult.deletedCount
         });
     } catch (error) {
@@ -131,12 +131,12 @@ export const getPlatformOverview = async (req, res) => {
     try {
         const [
             totalUsers,
-            totalAdmins,
+            totalSellers,
             totalProducts,
             totalOrders,
         ] = await Promise.all([
             User.countDocuments(),
-            Admin.countDocuments(),
+            Seller.countDocuments(),
             Product.countDocuments(),
             Order.countDocuments(),
         ]);
@@ -155,9 +155,9 @@ export const getPlatformOverview = async (req, res) => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const [newUsers, newAdmins, newOrders] = await Promise.all([
+        const [newUsers, newSellers, newOrders] = await Promise.all([
             User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
-            Admin.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+            Seller.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
             Order.countDocuments({ createdAt: { $gte: thirtyDaysAgo } })
         ]);
 
@@ -166,7 +166,7 @@ export const getPlatformOverview = async (req, res) => {
             data: {
                 overview: {
                     totalUsers,
-                    totalAdmins,
+                    totalSellers,
                     totalProducts,
                     totalOrders
                 },
@@ -176,7 +176,7 @@ export const getPlatformOverview = async (req, res) => {
                 },
                 recentActivity: {
                     newUsers,
-                    newAdmins,
+                    newSellers,
                     newOrders,
                     period: "Last 30 days"
                 }
@@ -234,7 +234,7 @@ export const getTopSellers = async (req, res) => {
         ]);
 
         const sellerIds = topSellers.map(s => s.sellerId);
-        const sellers = await Admin.find({ _id: { $in: sellerIds } })
+        const sellers = await Seller.find({ _id: { $in: sellerIds } })
             .select("name email createdAt");
 
         const result = topSellers.map(stat => {
