@@ -1,64 +1,24 @@
-import Admin from "../models/admin.module.js";
-import bcrypt from "bcrypt";
-import { generateToken } from '../utils/generateToken.js'
-
-
+import { registerAdmin,loginAdmin } from "../service/adminAuth.service.js";
 export const adminRegister = async (req, res) => {
   try {
-    const { name, password } = req.body;
-    const email = req.body.email.toLowerCase();
-
-
-    const exists = await Admin.findOne({ email });
-    if (exists)
-      return res.status(400).json({ message: "Admin already exists" });
-
-    const hash = await bcrypt.hash(password, 10);
-
-    await Admin.create({
-      name,
-      email,
-      password: hash,
-    });
-
-    res.status(201).json({
-      message: "Admin registered successfully. Please login to continue.",
-    });
-
+    const { name, email, password } = req.body;
+    const result = await registerAdmin(name, email, password);
+    res.status(201).json(result);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.message === "Admin already exists" ? 400 : 500;
+    res.status(statusCode).json({ success: false, message: err.message });
   }
 };
 
-
-
 export const adminLogin = async (req, res) => {
   try {
-    const { password } = req.body;
-    const email = req.body.email.toLowerCase();
-
-
-    const admin = await Admin.findOne({ email });
-    if (!admin)
-      return res.status(404).json({ message: "Admin not found" });
-
-    const match = await bcrypt.compare(password, admin.password);
-    if (!match)
-      return res.status(400).json({ message: "Invalid credentials" });
-
-    const token = generateToken({
-      id: admin._id,
-      role: "admin",
-    });
-
-    res.status(200).json({
-      message: "Login successful",
-      token,
-      role: "admin",
-      name: admin.name
-    });
-
+    const { email, password } = req.body;
+    const result = await loginAdmin(email, password);
+    res.status(200).json(result);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    let statusCode = 500;
+    if (err.message === "Admin not found") statusCode = 404;
+    if (err.message === "Invalid credentials") statusCode = 400;
+    res.status(statusCode).json({ success: false, message: err.message });
   }
 };
