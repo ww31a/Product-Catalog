@@ -39,13 +39,13 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-if (process.env.NODE_ENV !== "production") {
+// if (process.env.NODE_ENV !== "production") {
   // app.use(cors());
   app.use(cors({
     origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
     credentials: true,
   }));
-}
+// }
 
 app.use('/api/products', productrouter);
 app.use('/api/seller/auth', sellerAuthRouter);
