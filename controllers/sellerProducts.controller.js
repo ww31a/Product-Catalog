@@ -5,7 +5,7 @@ import stockHistory from "../models/stockHistory.module.js";
 
 export const getSellerProducts = async (req, res) => {
   try {
-    const sellerId = req.user?.userId;
+    const sellerId = req.auth.userId;
 
     if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
       return res.status(400).json({ success: false, message: "Invalid seller ID" });
@@ -21,7 +21,7 @@ export const getSellerProducts = async (req, res) => {
 export const getSellerProductByID = async (req, res) => {
   try {
     const { id } = req.params;
-    const sellerId = req.user?.userId;
+    const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
@@ -42,7 +42,7 @@ export const getSellerProductByID = async (req, res) => {
 export const addProduct = async (req, res) => {
   try {
     const { title, description, stock, price, brand, category, sizes } = req.body;
-    const sellerId = req.user?.userId;
+    const sellerId = req.auth.userId;
 
     if (!req.file?.path) {
       return res.status(400).json({ success: false, message: "Image is required" });
@@ -95,7 +95,7 @@ export const addProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const sellerId = req.user?.userId;
+    const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
@@ -151,7 +151,7 @@ export const updateProduct = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const sellerId = req.user?.userId;
+    const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
@@ -176,7 +176,7 @@ export const deleteProduct = async (req, res) => {
 
 export const bulkDeleteProducts = async (req, res) => {
   try {
-    const sellerId = req.user?.userId;
+    const sellerId = req.auth.userId;
     const { productIds } = req.body;
 
     if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -213,7 +213,7 @@ export const updateStock = async (req, res) => {
   try {
     const { id } = req.params;
     const { stock } = req.body;
-    const sellerId = req.user.userId;
+    const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
