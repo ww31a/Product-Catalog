@@ -14,15 +14,6 @@ const userSchema = new mongoose.Schema(
       default: {}
     },
 
-    phone: {
-      type: String,
-      trim: true
-    },
-
-    address: {
-      type: Object, 
-      default: {}
-    }
   },
   { timestamps: true, minimize: false }
 );
