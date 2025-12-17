@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
-import Product from '../models/products.module.js';
-import stockHistory from "../models/stockHistory.module.js";
-
+import ProductService from '../services/product.service.js';
+import StockHistoryService from "../services/stockHistory.service.js";
 
 export const getSellerProducts = async (req, res) => {
   try {
@@ -11,7 +10,7 @@ export const getSellerProducts = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid seller ID" });
     }
 
-    const products = await Product.find({ owner: sellerId });
+    const products = await ProductService.findByOwner(sellerId);
     return res.status(200).json({ success: true, products });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -27,7 +26,7 @@ export const getSellerProductByID = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
-    const product = await Product.findOne({ _id: id, owner: sellerId });
+    const product = await ProductService.findByIdAndOwner(id, sellerId);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
@@ -37,7 +36,6 @@ export const getSellerProductByID = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 export const addProduct = async (req, res) => {
   try {
@@ -59,7 +57,7 @@ export const addProduct = async (req, res) => {
       }
     }
 
-    const product = await Product.create({
+    const product = await ProductService.create({
       title,
       description,
       price,
@@ -73,7 +71,7 @@ export const addProduct = async (req, res) => {
 
     // Initial stock history
     if (product.stock > 0) {
-      await stockHistory.create({
+      await StockHistoryService.create({
         productId: product._id,
         previousStock: 0,
         newStock: product.stock,
@@ -91,7 +89,6 @@ export const addProduct = async (req, res) => {
   }
 };
 
-
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -101,7 +98,7 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
-    const existingProduct = await Product.findOne({ _id: id, owner: sellerId });
+    const existingProduct = await ProductService.findByIdAndOwner(id, sellerId);
     if (!existingProduct) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
@@ -126,11 +123,11 @@ export const updateProduct = async (req, res) => {
     const previousStock = existingProduct.stock;
     const newStock = updatedData.stock !== undefined ? Number(updatedData.stock) : undefined;
 
-    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true });
+    const updatedProduct = await ProductService.update(id, updatedData);
 
     if (newStock !== undefined && previousStock !== newStock) {
       const change = newStock - previousStock;
-      await stockHistory.create({
+      await StockHistoryService.create({
         productId: existingProduct._id,
         previousStock,
         newStock,
@@ -157,12 +154,12 @@ export const deleteProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
 
-    const product = await Product.findOneAndDelete({ _id: id, owner: sellerId });
+    const product = await ProductService.deleteByIdAndOwner(id, sellerId);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
 
-    await stockHistory.deleteMany({ productId: id });
+    await StockHistoryService.deleteByProductId(id);
 
     res.status(200).json({
       success: true,
@@ -188,16 +185,13 @@ export const bulkDeleteProducts = async (req, res) => {
       return res.status(400).json({ success: false, message: `Invalid product IDs: ${invalidIds.join(", ")}` });
     }
 
-    const result = await Product.deleteMany({
-      _id: { $in: productIds },
-      owner: sellerId
-    });
+    const result = await ProductService.bulkDeleteByOwner(productIds, sellerId);
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: "No products deleted. Make sure they exist and belong to you." });
     }
 
-    await stockHistory.deleteMany({ productId: { $in: productIds } });
+    await StockHistoryService.deleteByProductIds(productIds);
 
     res.status(200).json({
       success: true,
@@ -223,7 +217,7 @@ export const updateStock = async (req, res) => {
       return res.status(400).json({ success: false, message: "Stock must be non-negative" });
     }
 
-    const existingProduct = await Product.findOne({ _id: id, owner: sellerId });
+    const existingProduct = await ProductService.findByIdAndOwner(id, sellerId);
     if (!existingProduct) {
       return res.status(400).json({ success: false, message: "Product does not exist" });
     }
@@ -231,15 +225,11 @@ export const updateStock = async (req, res) => {
     const previousStock = existingProduct.stock;
     const newStock = parseInt(stock);
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
-      { stock: newStock },
-      { new: true }
-    );
+    const updatedProduct = await ProductService.updateStock(id, newStock);
 
     if (previousStock !== newStock) {
       const change = newStock - previousStock;
-      await stockHistory.create({
+      await StockHistoryService.create({
         productId: existingProduct._id,
         previousStock,
         newStock,

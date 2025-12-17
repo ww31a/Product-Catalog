@@ -1,4 +1,4 @@
-import Product from "../models/products.module.js";
+import Product from '../models/products.module.js'
 import mongoose from "mongoose";
 
 class ProductService {
@@ -224,6 +224,41 @@ class ProductService {
     })
       .populate('owner', 'name email')
       .sort({ updatedAt: 1 });
+  }
+
+  async findByIdAndOwner(id, ownerId) {
+    return await Product.findOne({ _id: id, owner: ownerId });
+  }
+
+  async deleteByIdAndOwner(id, ownerId) {
+    return await Product.findOneAndDelete({ _id: id, owner: ownerId });
+  }
+
+  async bulkDeleteByOwner(productIds, ownerId) {
+    return await Product.deleteMany({
+      _id: { $in: productIds },
+      owner: ownerId
+    });
+  }
+
+  async deleteByOwner(ownerId) {
+    return await Product.deleteMany({ owner: ownerId });
+  }
+
+  async deleteByOwners(ownerIds) {
+    return await Product.deleteMany({ owner: { $in: ownerIds } });
+  }
+
+  async findByOwnersWithSelect(ownerIds, selectFields = "") {
+    return await Product.find({ owner: { $in: ownerIds } }).select(selectFields);
+  }
+
+  async findWithPaginationAndPopulate(filter = {}, sort = { createdAt: -1 }, skip = 0, limit = 10, populateField = "", populateSelect = "") {
+    return await Product.find(filter)
+      .populate(populateField, populateSelect)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
   }
 }
 

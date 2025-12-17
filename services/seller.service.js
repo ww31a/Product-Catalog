@@ -65,6 +65,30 @@ class SellerService {
   async count() {
     return await Seller.countDocuments();
   }
+
+  async countDocuments(filter = {}) {
+    return await Seller.countDocuments(filter);
+  }
+
+  async countSince(date) {
+    return await Seller.countDocuments({ createdAt: { $gte: date } });
+  }
+
+  async findWithPagination(filter = {}, sort = { createdAt: -1 }, skip = 0, limit = 10, selectFields = "") {
+    return await Seller.find(filter)
+      .select(selectFields)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
+  }
+
+  async bulkDelete(sellerIds) {
+    return await Seller.deleteMany({ _id: { $in: sellerIds } });
+  }
+
+  async findByIdsWithSelect(sellerIds, selectFields = "") {
+    return await Seller.find({ _id: { $in: sellerIds } }).select(selectFields);
+  }
 }
 
 export default new SellerService();

@@ -115,6 +115,51 @@ class StockHistoryService {
       createdAt: { $gte: dateThreshold }
     });
   }
+
+  async deleteByProductIds(productIds) {
+    return await StockHistory.deleteMany({ 
+      productId: { $in: productIds } 
+    });
+  }
+
+  async getTopSellersByRevenue(dateThreshold, limit = 10) {
+    return await StockHistory.aggregate([
+      {
+        $match: {
+          type: "remove",
+          reason: "sale",
+          createdAt: { $gte: dateThreshold }
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "productId",
+          foreignField: "_id",
+          as: "product"
+        }
+      },
+      { $unwind: "$product" },
+      {
+        $group: {
+          _id: "$product.owner",
+          totalRevenue: { $sum: { $multiply: ["$product.price", { $abs: "$change" }] } },
+          totalItemsSold: { $sum: { $abs: "$change" } },
+          orderCount: { $addToSet: "$orderId" }
+        }
+      },
+      {
+        $project: {
+          sellerId: "$_id",
+          totalRevenue: 1,
+          totalItemsSold: 1,
+          orderCount: { $size: "$orderCount" }
+        }
+      },
+      { $sort: { totalRevenue: -1 } },
+      { $limit: limit }
+    ]);
+  }
 }
 
 export default new StockHistoryService();

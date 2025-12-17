@@ -6,7 +6,7 @@ const { ObjectId } = mongoose.Types;
 
 const getUserCart = async (req, res) => {
   try {
-    const user = await UserService.findByIdWithSelect(req.auth.userId, "cartData");
+    const user = await UserService.findByAppUserIdWithSelect(req.auth.userId, "cartData");
     const cartData = user?.cartData || {};
 
     const productIds = Object.keys(cartData).filter(id => ObjectId.isValid(id));
@@ -64,7 +64,7 @@ const addToCart = async (req, res) => {
       return res.status(400).json({ error: true, message: `Size ${size} not available` });
     }
 
-    const user = await UserService.findByIdWithSelect(userId, "cartData");
+    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
     const current = user.cartData[itemId] || { quantity: 0, size: null };
 
     const finalSize = hasSizes ? size : null;
@@ -108,7 +108,7 @@ const modifyCartQuantity = async (req, res) => {
       return res.status(404).json({ error: true, message: "Product not found" });
     }
 
-    const user = await UserService.findByIdWithSelect(userId, "cartData");
+    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
     const current = user.cartData[itemId];
 
     if (!current || current.quantity <= 0) {

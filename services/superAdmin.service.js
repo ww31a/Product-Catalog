@@ -49,6 +49,10 @@ class SuperAdminService {
       { new: true }
     );
   }
+
+  async findByIdWithSelect(id, selectFields = "") {
+    return await SuperAdmin.findById(id).select(selectFields);
+  }
 }
 
 export default new SuperAdminService();

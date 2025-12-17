@@ -93,20 +93,63 @@ class UserService {
     return await User.findById(id).select(selectFields);
   }
 
+  async findByAppUserIdWithSelect(appUserId, selectFields = "") {
+    return await User.findOne({ userId: appUserId }).select(selectFields);
+  }
+
+
+  // async updateCartItem(userId, itemId, itemData) {
+  //   return await User.findByIdAndUpdate(
+  //     userId,
+  //     { $set: { [`cartData.${itemId}`]: itemData } },
+  //     { new: true }
+  //   );
+  // }
+
+  // async removeCartItem(userId, itemId) {
+  //   return await User.findByIdAndUpdate(
+  //     userId,
+  //     { $unset: { [`cartData.${itemId}`]: "" } },
+  //     { new: true }
+  //   );
+  // }
+
   async updateCartItem(userId, itemId, itemData) {
-    return await User.findByIdAndUpdate(
-      userId,
+    return await User.findOneAndUpdate(
+      { userId },   // ✅ find by userId, not _id
       { $set: { [`cartData.${itemId}`]: itemData } },
-      { new: true }
+      { new: true, runValidators: true }
     );
   }
 
   async removeCartItem(userId, itemId) {
-    return await User.findByIdAndUpdate(
-      userId,
+    return await User.findOneAndUpdate(
+      { userId },   // ✅ find by userId, not _id
       { $unset: { [`cartData.${itemId}`]: "" } },
       { new: true }
     );
+  }
+
+
+
+  async count() {
+    return await User.countDocuments();
+  }
+
+  async countDocuments(filter = {}) {
+    return await User.countDocuments(filter);
+  }
+
+  async countSince(date) {
+    return await User.countDocuments({ createdAt: { $gte: date } });
+  }
+
+  async findWithPagination(filter = {}, sort = { createdAt: -1 }, skip = 0, limit = 10, selectFields = "") {
+    return await User.find(filter)
+      .select(selectFields)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
   }
 }
 

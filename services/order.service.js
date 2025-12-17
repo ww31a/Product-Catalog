@@ -128,6 +128,46 @@ class OrderService {
       { $limit: limit }
     ]);
   }
+
+  async findOrdersContainingProducts(productIds) {
+    return await Order.find({
+      "items._id": { $in: productIds }
+    }).sort({ createdAt: -1 });
+  }
+
+  async count() {
+    return await Order.countDocuments();
+  }
+
+  async countDocuments(filter = {}) {
+    return await Order.countDocuments(filter);
+  }
+
+  async countSince(date) {
+    return await Order.countDocuments({ createdAt: { $gte: date } });
+  }
+
+  async getRevenueStats() {
+    const result = await Order.aggregate([
+      { $match: { payment: true } },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$amount" },
+          averageOrderValue: { $avg: "$amount" }
+        }
+      }
+    ]);
+    return result[0] || { totalRevenue: 0, averageOrderValue: 0 };
+  }
+
+  async findWithPaginationAndPopulate(filter = {}, sort = { createdAt: -1 }, skip = 0, limit = 10, populateField = "", populateSelect = "") {
+    return await Order.find(filter)
+      .populate(populateField, populateSelect)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
+  }
 }
 
 export default new OrderService();

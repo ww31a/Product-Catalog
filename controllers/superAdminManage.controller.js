@@ -1,10 +1,9 @@
-import Seller from "../models/seller.module.js";
-import Product from "../models/products.module.js";
-import Order from "../models/order.module.js";
-import User from "../models/user.module.js";
-import stockHistory from "../models/stockHistory.module.js";
 import mongoose from "mongoose";
-
+import SellerService from "../services/seller.service.js";
+import ProductService from "../services/product.service.js";
+import OrderService from "../services/order.service.js";
+import UserService from "../services/user.service.js";
+import StockHistoryService from "../services/stockHistory.service.js";
 
 export const getAllSellers = async (req, res) => {
     try {
@@ -19,13 +18,15 @@ export const getAllSellers = async (req, res) => {
             ];
         }
 
-        const sellers = await Seller.find(query)
-            .select("-password")
-            .sort({ createdAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
+        const sellers = await SellerService.findWithPagination(
+            query,
+            { createdAt: -1 },
+            (page - 1) * limit,
+            limit * 1,
+            "-password"
+        );
 
-        const count = await Seller.countDocuments(query);
+        const count = await SellerService.countDocuments(query);
 
         res.json({
             success: true,
@@ -41,7 +42,6 @@ export const getAllSellers = async (req, res) => {
     }
 };
 
-
 export const deleteSeller = async (req, res) => {
     try {
         const { sellerId } = req.params;
@@ -53,7 +53,7 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
-        const seller = await Seller.findByIdAndDelete(sellerId);
+        const seller = await SellerService.delete(sellerId);
         if (!seller) {
             return res.status(404).json({
                 success: false,
@@ -61,12 +61,11 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
-        const sellerProducts = await Product.find({ owner: sellerId }).select("_id");
+        const sellerProducts = await ProductService.findByOwnerWithSelect(sellerId, "_id");
         const productIds = sellerProducts.map(p => p._id);
 
-        await stockHistory.deleteMany({ productId: { $in: productIds } });
-
-        await Product.deleteMany({ owner: sellerId });
+        await StockHistoryService.deleteByProductIds(productIds);
+        await ProductService.deleteByOwner(sellerId);
 
         res.json({
             success: true,
@@ -79,7 +78,7 @@ export const deleteSeller = async (req, res) => {
 
 export const bulkDeleteSellers = async (req, res) => {
     try {
-        const { sellerIds } = req.body; // Expecting an array of seller IDs
+        const { sellerIds } = req.body;
 
         if (!Array.isArray(sellerIds) || sellerIds.length === 0) {
             return res.status(400).json({
@@ -88,7 +87,6 @@ export const bulkDeleteSellers = async (req, res) => {
             });
         }
 
-        // Validate all IDs
         const invalidIds = sellerIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
         if (invalidIds.length > 0) {
             return res.status(400).json({
@@ -98,8 +96,7 @@ export const bulkDeleteSellers = async (req, res) => {
             });
         }
 
-        // Delete sellers
-        const deleteResult = await Seller.deleteMany({ _id: { $in: sellerIds } });
+        const deleteResult = await SellerService.bulkDelete(sellerIds);
 
         if (deleteResult.deletedCount === 0) {
             return res.status(404).json({
@@ -108,13 +105,11 @@ export const bulkDeleteSellers = async (req, res) => {
             });
         }
 
-        // Get all products owned by these sellers
-        const sellerProducts = await Product.find({ owner: { $in: sellerIds } }).select("_id");
+        const sellerProducts = await ProductService.findByOwnersWithSelect(sellerIds, "_id");
         const productIds = sellerProducts.map(p => p._id);
 
-        // Delete stock history and products
-        await stockHistory.deleteMany({ productId: { $in: productIds } });
-        await Product.deleteMany({ owner: { $in: sellerIds } });
+        await StockHistoryService.deleteByProductIds(productIds);
+        await ProductService.deleteByOwners(sellerIds);
 
         res.json({
             success: true,
@@ -126,7 +121,6 @@ export const bulkDeleteSellers = async (req, res) => {
     }
 };
 
-
 export const getPlatformOverview = async (req, res) => {
     try {
         const [
@@ -135,30 +129,21 @@ export const getPlatformOverview = async (req, res) => {
             totalProducts,
             totalOrders,
         ] = await Promise.all([
-            User.countDocuments(),
-            Seller.countDocuments(),
-            Product.countDocuments(),
-            Order.countDocuments(),
+            UserService.count(),
+            SellerService.count(),
+            ProductService.countDocuments(),
+            OrderService.count(),
         ]);
 
-        const revenueData = await Order.aggregate([
-            { $match: { payment: true } },
-            {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: "$amount" },
-                    averageOrderValue: { $avg: "$amount" }
-                }
-            }
-        ]);
+        const revenueData = await OrderService.getRevenueStats();
 
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
         const [newUsers, newSellers, newOrders] = await Promise.all([
-            User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
-            Seller.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
-            Order.countDocuments({ createdAt: { $gte: thirtyDaysAgo } })
+            UserService.countSince(thirtyDaysAgo),
+            SellerService.countSince(thirtyDaysAgo),
+            OrderService.countSince(thirtyDaysAgo)
         ]);
 
         res.json({
@@ -171,8 +156,8 @@ export const getPlatformOverview = async (req, res) => {
                     totalOrders
                 },
                 revenue: {
-                    total: revenueData[0]?.totalRevenue || 0,
-                    average: revenueData[0]?.averageOrderValue || 0
+                    total: revenueData.totalRevenue || 0,
+                    average: revenueData.averageOrderValue || 0
                 },
                 recentActivity: {
                     newUsers,
@@ -187,7 +172,6 @@ export const getPlatformOverview = async (req, res) => {
     }
 };
 
-
 export const getTopSellers = async (req, res) => {
     try {
         const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 10, 100));
@@ -196,46 +180,16 @@ export const getTopSellers = async (req, res) => {
         const dateThreshold = new Date();
         dateThreshold.setDate(dateThreshold.getDate() - days);
 
-        const topSellers = await stockHistory.aggregate([
-            {
-                $match: {
-                    type: "remove",
-                    reason: "sale",
-                    createdAt: { $gte: dateThreshold }
-                }
-            },
-            {
-                $lookup: {
-                    from: "products",
-                    localField: "productId",
-                    foreignField: "_id",
-                    as: "product"
-                }
-            },
-            { $unwind: "$product" },
-            {
-                $group: {
-                    _id: "$product.owner",
-                    totalRevenue: { $sum: { $multiply: ["$product.price", { $abs: "$change" }] } },
-                    totalItemsSold: { $sum: { $abs: "$change" } },
-                    orderCount: { $addToSet: "$orderId" }
-                }
-            },
-            {
-                $project: {
-                    sellerId: "$_id",
-                    totalRevenue: 1,
-                    totalItemsSold: 1,
-                    orderCount: { $size: "$orderCount" }
-                }
-            },
-            { $sort: { totalRevenue: -1 } },
-            { $limit: limit }
-        ]);
+        const topSellers = await StockHistoryService.getTopSellersByRevenue(
+            dateThreshold,
+            limit
+        );
 
         const sellerIds = topSellers.map(s => s.sellerId);
-        const sellers = await Seller.find({ _id: { $in: sellerIds } })
-            .select("name email createdAt");
+        const sellers = await SellerService.findByIdsWithSelect(
+            sellerIds,
+            "name email createdAt"
+        );
 
         const result = topSellers.map(stat => {
             const seller = sellers.find(s => s._id.toString() === stat.sellerId.toString());
@@ -271,13 +225,15 @@ export const getAllUsers = async (req, res) => {
             ];
         }
 
-        const users = await User.find(query)
-            .select("-password -cartData")
-            .sort({ createdAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
+        const users = await UserService.findWithPagination(
+            query,
+            { createdAt: -1 },
+            (page - 1) * limit,
+            limit * 1,
+            "-password -cartData"
+        );
 
-        const count = await User.countDocuments(query);
+        const count = await UserService.countDocuments(query);
 
         res.json({
             success: true,
@@ -293,7 +249,6 @@ export const getAllUsers = async (req, res) => {
     }
 };
 
-
 export const getAllProducts = async (req, res) => {
     try {
         const { search, category, page = 1, limit = 10 } = req.query;
@@ -307,13 +262,16 @@ export const getAllProducts = async (req, res) => {
         }
         if (category) query.category = category;
 
-        const products = await Product.find(query)
-            .populate("owner", "name email")
-            .sort({ createdAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
+        const products = await ProductService.findWithPaginationAndPopulate(
+            query,
+            { createdAt: -1 },
+            (page - 1) * limit,
+            limit * 1,
+            "owner",
+            "name email"
+        );
 
-        const count = await Product.countDocuments(query);
+        const count = await ProductService.countDocuments(query);
 
         res.json({
             success: true,
@@ -329,19 +287,16 @@ export const getAllProducts = async (req, res) => {
     }
 };
 
-
 export const getAllOrders = async (req, res) => {
     try {
         const { status, search, page = 1, limit = 10 } = req.query;
 
         const query = {};
         
-        // Filter by status
         if (status) {
             query.status = status;
         }
 
-        // Search functionality
         if (search) {
             query.$or = [
                 { orderId: { $regex: search, $options: 'i' } },
@@ -349,13 +304,16 @@ export const getAllOrders = async (req, res) => {
             ];
         }
 
-        const orders = await Order.find(query)
-            .populate("userId", "name email")
-            .sort({ createdAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
+        const orders = await OrderService.findWithPaginationAndPopulate(
+            query,
+            { createdAt: -1 },
+            (page - 1) * limit,
+            limit * 1,
+            "userId",
+            "name email"
+        );
 
-        const count = await Order.countDocuments(query);
+        const count = await OrderService.countDocuments(query);
 
         res.json({
             success: true,
