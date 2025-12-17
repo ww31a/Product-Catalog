@@ -1,67 +1,77 @@
 import bcrypt from "bcrypt";
-import { generateToken } from '../utils/generateToken.js'
-import User from "../models/user.module.js";
-import { mergeGuestCartIntoUserCart } from "../utils/mergeCart.js";
+import { generateToken } from '../utils/generateToken.js';
+import AppUser from "../models/appUser.module.js";
 
-export const userRegister = async (req, res) => {
+export const sellerRegister = async (req, res) => {
   try {
     const { name, password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    const exists = await User.findOne({ email });
-    if (exists)
-      return res.status(400).json({ message: "User already exists" });
+    // Check if seller already exists
+    const exists = await AppUser.findOne({ email });
+    if (exists) {
+      return res.status(400).json({
+        message: "Seller already exists"
+      });
+    }
 
     const hash = await bcrypt.hash(password, 10);
 
-    await User.create({
+    // Create new AppUser with role 'seller'
+    const newSeller = await AppUser.create({
       name,
       email,
       password: hash,
+      roles: ["seller"]
     });
 
     res.status(201).json({
-      message: "User registered successfully. Please login to continue.",
+      message: "Seller registered successfully. Please login to continue."
     });
 
   } catch (err) {
+    console.error("sellerRegister error:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
 
-
-export const userLogin = async (req, res) => {
+export const sellerLogin = async (req, res) => {
   try {
-    const { password,guestCart } = req.body;
+    const { password } = req.body;
     const email = req.body.email.toLowerCase();
 
+    // Find seller with role 'seller'
+    const seller = await AppUser.findOne({ email, roles: "seller" });
+    if (!seller) {
+      return res.status(404).json({
+        message: "Seller not found"
+      });
+    }
 
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ message: "User not found" });
+    // Compare password
+    const match = await bcrypt.compare(password, seller.password);
+    if (!match) {
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
+    }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match)
-      return res.status(400).json({ message: "Invalid credentials" });
-
-    
-     if (guestCart?.length > 0) {
-            await mergeGuestCartIntoUserCart(user._id, guestCart);
-        }
-
+    // Generate JWT with roles array (backward compatible)
     const token = generateToken({
-      id: user._id,
-      role: "user",
+      id: seller._id,
+      role: "seller",       // legacy
+      roles: seller.roles   // future-proof
     });
 
     res.status(200).json({
       message: "Login successful",
       token,
-      role: "user",
-      name: user.name
+      role: "seller", // legacy field for frontend
+      name: seller.name
     });
 
   } catch (err) {
+    console.error("sellerLogin error:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
