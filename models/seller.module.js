@@ -2,24 +2,39 @@ import mongoose from "mongoose";
 
 const sellerSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AppUser",
       required: true,
-      trim: true,
+      unique: true
     },
 
-    email: {
+    storeName: {
       type: String,
       required: true,
-      unique: true,
-      trim: true,
-      lowercase: true,
+      trim: true
     },
 
-    password: {
+    businessEmail: {
       type: String,
-      required: true,
+      trim: true,
+      lowercase: true
     },
+
+    phone: {
+      type: String,
+      trim: true
+    },
+
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+
+    isBlocked: {
+      type: Boolean,
+      default: false
+    }
   },
   { timestamps: true }
 );
