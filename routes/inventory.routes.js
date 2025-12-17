@@ -2,7 +2,6 @@ import express from "express";
 import { getDeadStock,getInStockAlert,getLowStockAlert,getOutOfStockAlert,getStockSummary, getBestSellingProducts }
  from "../controllers/sellerInventory.controller.js";
 
-import { verifySeller } from "../middlewares/verifySeller.js";
 import { verifyAuth } from "../middlewares/verifyAuth.js";
 import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 

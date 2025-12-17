@@ -1,6 +1,5 @@
 import express from "express";
 import { modifyCartQuantity,getUserCart,removeFromCart, addToCart } from "../controllers/cart.controller.js";
-import { verifyUser } from "../middlewares/verifyUser.js";
 import { verifyAuth } from "../middlewares/verifyAuth.js";
 import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 
