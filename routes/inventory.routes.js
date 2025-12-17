@@ -3,6 +3,8 @@ import { getDeadStock,getInStockAlert,getLowStockAlert,getOutOfStockAlert,getSto
  from "../controllers/sellerInventory.controller.js";
 
 import { verifySeller } from "../middlewares/verifySeller.js";
+import { verifyAuth } from "../middlewares/verifyAuth.js";
+import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 
 const inventoryRouter = express.Router();
 
@@ -19,19 +21,19 @@ const inventoryRouter = express.Router();
 // inventoryRouter.get('/history', getAllHistory);
 
 //inventory Reports endpoints
-inventoryRouter.get('/reports/low-stock',verifySeller,getLowStockAlert);
+inventoryRouter.get('/reports/low-stock',verifyAuth, authorizeRoles("seller"),getLowStockAlert);
 
-inventoryRouter.get('/reports/out-of-stock',verifySeller,getOutOfStockAlert);
+inventoryRouter.get('/reports/out-of-stock',verifyAuth, authorizeRoles("seller"),getOutOfStockAlert);
 
-inventoryRouter.get('/reports/in-stock',verifySeller,getInStockAlert);
+inventoryRouter.get('/reports/in-stock',verifyAuth, authorizeRoles("seller"),getInStockAlert);
 
 // inventoryRouter.get('/report/value',getTotalInventoryValue);
 
 //stock change summary
-inventoryRouter.get('/reports/summary',verifySeller,getStockSummary);
+inventoryRouter.get('/reports/summary',verifyAuth, authorizeRoles("seller"),getStockSummary);
 
-inventoryRouter.get('/reports/dead-stock',verifySeller,getDeadStock)
+inventoryRouter.get('/reports/dead-stock',verifyAuth, authorizeRoles("seller"),getDeadStock)
 
-inventoryRouter.get('/reports/best-selling',verifySeller,getBestSellingProducts)
+inventoryRouter.get('/reports/best-selling',verifyAuth, authorizeRoles("seller"),getBestSellingProducts)
 
 export default inventoryRouter;
