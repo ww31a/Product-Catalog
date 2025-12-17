@@ -1,7 +1,6 @@
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js';
-import AppUser from "../models/AppUser.module.js";
-
+import AppUserService from "../services/appUser.service.js";
 
 export const sellerRegister = async (req, res) => {
   try {
@@ -9,7 +8,7 @@ export const sellerRegister = async (req, res) => {
     const email = req.body.email.toLowerCase();
 
     // Check if seller already exists
-    const exists = await AppUser.findOne({ email });
+    const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({
         message: "Seller already exists"
@@ -19,7 +18,7 @@ export const sellerRegister = async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     // Create new AppUser with role 'seller'
-    const newSeller = await AppUser.create({
+    const newSeller = await AppUserService.create({
       name,
       email,
       password: hash,
@@ -42,7 +41,7 @@ export const sellerLogin = async (req, res) => {
     const email = req.body.email.toLowerCase();
 
     // Find seller with role 'seller'
-    const seller = await AppUser.findOne({ email, roles: "seller" });
+    const seller = await AppUserService.findByEmailWithRole(email, "seller");
     if (!seller) {
       return res.status(404).json({
         message: "Seller not found"

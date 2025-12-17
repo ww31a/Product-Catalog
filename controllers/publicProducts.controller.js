@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import Product from "../models/products.module.js";
+import ProductService from "../services/product.service.js";
 
 export const getAllProducts = async (req, res) => {
   try {
@@ -33,7 +33,8 @@ export const getAllProducts = async (req, res) => {
       if (maxPrice !== null) filter.price.$lte = maxPrice;
     }
 
-    const total = await Product.countDocuments(filter);
+    // Get total count using service
+    const total = await ProductService.countDocuments(filter);
     let products;
 
     if (page && limit) {
@@ -41,10 +42,15 @@ export const getAllProducts = async (req, res) => {
         return res.status(400).json({ message: "Page & limit must be ≥ 1" });
       }
       const skip = (page - 1) * limit;
-      products = await Product.find(filter, "-owner")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
+      
+      // Use service for paginated query
+      products = await ProductService.findWithPagination(
+        filter, 
+        { createdAt: -1 }, 
+        skip, 
+        limit, 
+        "-owner"
+      );
 
       res.status(200).json({
         total,
@@ -54,7 +60,12 @@ export const getAllProducts = async (req, res) => {
         products,
       });
     } else {
-      products = await Product.find(filter, "-owner").sort({ createdAt: -1 });
+      // Use service for all products
+      products = await ProductService.findAllWithSelect(
+        filter, 
+        "-owner", 
+        { createdAt: -1 }
+      );
       res.status(200).json({ total, products });
     }
 
@@ -70,8 +81,10 @@ export const getProductByID = async (req, res) => {
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    const product = await Product.findById(id).select("-owner");
-    if (!product) return res.status(404).json({ message: "Product not found" });
+    const product = await ProductService.findByIdWithSelect(id, "-owner");
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
 
     res.status(200).json(product);
 

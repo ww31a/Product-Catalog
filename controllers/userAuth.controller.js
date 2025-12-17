@@ -1,8 +1,8 @@
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js';
-import AppUser from "../models/AppUser.module.js";
-import User from "../models/user.module.js";
 import { mergeGuestCartIntoUserCart } from "../utils/mergeCart.js";
+import AppUserService from "../services/appUser.service.js";
+import UserService from "../services/user.service.js";
 
 export const userRegister = async (req, res) => {
   try {
@@ -10,7 +10,7 @@ export const userRegister = async (req, res) => {
     const email = req.body.email.toLowerCase();
 
     // Check if user already exists
-    const exists = await AppUser.findOne({ email });
+    const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({
         success: false,
@@ -21,14 +21,14 @@ export const userRegister = async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     // Create new AppUser with role 'user'
-    const newUser = await AppUser.create({
+    const newUser = await AppUserService.create({
       name,
       email,
       password: hash,
       roles: ["user"]
     });
 
-    await User.create({
+    await UserService.create({
       userId: newUser._id,
     });
 
@@ -52,7 +52,7 @@ export const userLogin = async (req, res) => {
     const email = req.body.email.toLowerCase();
 
     // Find user with role 'user'
-    const user = await AppUser.findOne({ email, roles: "user" });
+    const user = await AppUserService.findByEmailWithRole(email, "user");
     if (!user) {
       return res.status(404).json({
         success: false,
