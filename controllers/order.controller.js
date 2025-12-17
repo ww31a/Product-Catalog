@@ -11,7 +11,7 @@ const taxRate = 0.05;
 
 const placeOrderCOD = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.auth.userId;
         const { items, amount, address } = req.body;
 
         for (const item of items) {
@@ -81,7 +81,7 @@ const placeOrderCOD = async (req, res) => {
 
 const placeOrderStripe = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.auth.userId;
         const { items, amount, address } = req.body;
         const { origin } = req.headers;
 
@@ -164,7 +164,7 @@ const placeOrderStripe = async (req, res) => {
 };
 
 const verifyStripe = async (req, res) => {
-    const userId = req.user.id;
+    const userId = req.auth.userId;
     const { success, orderId } = req.body;
 
     try {
@@ -231,7 +231,7 @@ const verifyStripe = async (req, res) => {
 
 const getUserOrders = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.auth.userId;
 
         const orders = await Order.find({
             userId,
@@ -246,7 +246,7 @@ const getUserOrders = async (req, res) => {
 
 const cancelOrder = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.auth.userId;
         const { orderId } = req.body;
 
         const order = await Order.findById(orderId);
