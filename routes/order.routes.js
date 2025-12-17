@@ -1,7 +1,5 @@
 import express from "express";
 import { placeOrderCOD,placeOrderStripe, verifyStripe, getUserOrders, cancelOrder } from "../controllers/order.controller.js";
-import { verifySeller } from "../middlewares/verifySeller.js";
-import { verifyUser } from "../middlewares/verifyUser.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import {orderSchema} from '../utils/JoiValidation.js'
 import { getSellerOrders, updateOrderStatus } from "../controllers/sellerOrders.controller.js";
@@ -10,17 +8,17 @@ import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 const orderRouter = express.Router();
 
 
-// orderRouter.get('/list',verifySeller,allOrder);
+// orderRouter.get('/list',verifyAuth, authorizeRoles("seller"),allOrder);
 
 orderRouter.get('/seller',verifyAuth, authorizeRoles("seller"),getSellerOrders)
-orderRouter.put('/seller/status',verifySeller,updateOrderStatus)
+orderRouter.put('/seller/status',verifyAuth, authorizeRoles("seller"),updateOrderStatus)
 
-orderRouter.post('/place',verifyAuth, authorizeRoles("seller"),validateBody(orderSchema),placeOrderCOD)
-orderRouter.post('/stripe',verifyAuth, authorizeRoles("seller"),validateBody(orderSchema),placeOrderStripe)
+orderRouter.post('/place',verifyAuth, authorizeRoles("user"),validateBody(orderSchema),placeOrderCOD)
+orderRouter.post('/stripe',verifyAuth, authorizeRoles("user"),validateBody(orderSchema),placeOrderStripe)
 
-orderRouter.post('/cancel',verifyAuth, authorizeRoles("seller"),cancelOrder)
-orderRouter.get('/',verifyAuth, authorizeRoles("seller"),getUserOrders)
-orderRouter.post('/verifystripe',verifyAuth, authorizeRoles("seller"),verifyStripe)
+orderRouter.post('/cancel',verifyAuth, authorizeRoles("user"),cancelOrder)
+orderRouter.get('/',verifyAuth, authorizeRoles("user"),getUserOrders)
+orderRouter.post('/verifystripe',verifyAuth, authorizeRoles("user"),verifyStripe)
 
 
 export default orderRouter;

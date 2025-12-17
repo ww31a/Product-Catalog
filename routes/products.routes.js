@@ -1,5 +1,4 @@
 import express from "express";
-import { verifySeller } from "../middlewares/verifySeller.js";
 import upload from "../middlewares/upload.js";
 import { getAllProducts, getProductByID } from "../controllers/publicProducts.controller.js";
 import { addProduct, bulkDeleteProducts, deleteProduct, getSellerProductByID, getSellerProducts, updateProduct, updateStock } from "../controllers/sellerProducts.controller.js";
