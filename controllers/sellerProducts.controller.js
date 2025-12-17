@@ -3,10 +3,9 @@ import Product from '../models/products.module.js';
 import stockHistory from "../models/stockHistory.module.js";
 
 
-// GET all seller products
 export const getSellerProducts = async (req, res) => {
   try {
-    const sellerId = req.user?.id;
+    const sellerId = req.user?.userId;
 
     if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
       return res.status(400).json({ success: false, message: "Invalid seller ID" });
@@ -19,13 +18,10 @@ export const getSellerProducts = async (req, res) => {
   }
 };
 
-
-
-// GET a single product by ID
 export const getSellerProductByID = async (req, res) => {
   try {
     const { id } = req.params;
-    const sellerId = req.user?.id;
+    const sellerId = req.user?.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
@@ -43,11 +39,10 @@ export const getSellerProductByID = async (req, res) => {
 };
 
 
-
-// ADD product – also create initial stock log if stock > 0
 export const addProduct = async (req, res) => {
   try {
     const { title, description, stock, price, brand, category, sizes } = req.body;
+    const sellerId = req.user?.userId;
 
     if (!req.file?.path) {
       return res.status(400).json({ success: false, message: "Image is required" });
@@ -57,7 +52,6 @@ export const addProduct = async (req, res) => {
     let parsedSizes = [];
     if (sizes) {
       parsedSizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
-
       for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
           return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL" });
@@ -74,10 +68,10 @@ export const addProduct = async (req, res) => {
       category,
       sizes: parsedSizes,
       image: req.file?.path || "",
-      owner: req.user.id
+      owner: sellerId
     });
 
-    // ✔ Create initial stock history (only if stock > 0)
+    // Initial stock history
     if (product.stock > 0) {
       await stockHistory.create({
         productId: product._id,
@@ -86,7 +80,7 @@ export const addProduct = async (req, res) => {
         change: product.stock,
         type: "add",
         reason: "restock",
-        changedBy: req.user.id,
+        changedBy: sellerId,
         notes: "Initial stock added"
       });
     }
@@ -98,12 +92,10 @@ export const addProduct = async (req, res) => {
 };
 
 
-
-// UPDATE product – logs STOCK CHANGES ONLY
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const sellerId = req.user?.id;
+    const sellerId = req.user?.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
@@ -117,12 +109,11 @@ export const updateProduct = async (req, res) => {
     const updatedData = { ...req.body };
     if (req.file) updatedData.image = req.file.path;
 
-    // Parse and validate sizes
+    // Parse sizes
     if (updatedData.sizes) {
       const parsedSizes = typeof updatedData.sizes === "string"
         ? JSON.parse(updatedData.sizes)
         : updatedData.sizes;
-
       for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
           return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL" });
@@ -131,19 +122,14 @@ export const updateProduct = async (req, res) => {
       updatedData.sizes = parsedSizes;
     }
 
-
-    // 🟨 CHECK IF STOCK IS BEING CHANGED
-    let previousStock = Number(existingProduct.stock);
-    let newStock = updatedData.stock !== undefined
-      ? Number(updatedData.stock)
-      : undefined;
+    // Stock change
+    const previousStock = existingProduct.stock;
+    const newStock = updatedData.stock !== undefined ? Number(updatedData.stock) : undefined;
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { new: true });
 
-    // 🟦 ONLY LOG HISTORY IF STOCK ACTUALLY CHANGED
     if (newStock !== undefined && previousStock !== newStock) {
       const change = newStock - previousStock;
-
       await stockHistory.create({
         productId: existingProduct._id,
         previousStock,
@@ -157,18 +143,15 @@ export const updateProduct = async (req, res) => {
     }
 
     res.status(200).json({ success: true, product: updatedProduct });
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-
-// DELETE product – also delete associated stock history
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const sellerId = req.user?.id;
+    const sellerId = req.user?.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid product ID" });
@@ -179,7 +162,6 @@ export const deleteProduct = async (req, res) => {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
     }
 
-    // ✅ Delete all stock history for this product
     await stockHistory.deleteMany({ productId: id });
 
     res.status(200).json({
@@ -187,18 +169,14 @@ export const deleteProduct = async (req, res) => {
       message: "Product and its stock history deleted successfully",
       product
     });
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-
-
-// BULK DELETE – also delete associated stock history
 export const bulkDeleteProducts = async (req, res) => {
   try {
-    const sellerId = req.user?.id;
+    const sellerId = req.user?.userId;
     const { productIds } = req.body;
 
     if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -219,34 +197,30 @@ export const bulkDeleteProducts = async (req, res) => {
       return res.status(404).json({ success: false, message: "No products deleted. Make sure they exist and belong to you." });
     }
 
-    // ✅ Delete all stock history for these products
-    const historyResult = await stockHistory.deleteMany({
-      productId: { $in: productIds }
-    });
+    await stockHistory.deleteMany({ productId: { $in: productIds } });
 
     res.status(200).json({
       success: true,
       message: `${result.deletedCount} product(s) deleted successfully`,
-      deletedCount: result.deletedCount,
-      stockHistoryDeleted: historyResult.deletedCount
+      deletedCount: result.deletedCount
     });
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-//update stock
+
 export const updateStock = async (req, res) => {
   try {
     const { id } = req.params;
     const { stock } = req.body;
-    const sellerId = req.user.id;
+    const sellerId = req.user.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid product ID" })
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
     }
+
     if (stock === undefined || isNaN(stock) || Number(stock) < 0) {
-      return res.status(400).json({ success: false, message: "Stock must be non-negative" })
+      return res.status(400).json({ success: false, message: "Stock must be non-negative" });
     }
 
     const existingProduct = await Product.findOne({ _id: id, owner: sellerId });
@@ -261,11 +235,10 @@ export const updateStock = async (req, res) => {
       id,
       { stock: newStock },
       { new: true }
-    ).populate('owner', 'name email');
+    );
 
     if (previousStock !== newStock) {
       const change = newStock - previousStock;
-
       await stockHistory.create({
         productId: existingProduct._id,
         previousStock,
@@ -275,12 +248,11 @@ export const updateStock = async (req, res) => {
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: sellerId,
         notes: "Quick stock change from seller stock page"
-      })
+      });
     }
-    if (updatedProduct.stock == newStock) {
-      return res.status(200).json({ success: true, message: "Stock Updated Succesfully" })
-    }
+
+    res.status(200).json({ success: true, message: "Stock Updated Successfully", product: updatedProduct });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message })
+    res.status(500).json({ success: false, message: err.message });
   }
-}
+};
