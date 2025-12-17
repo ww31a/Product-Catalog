@@ -1,17 +1,19 @@
 import express from "express";
 import { modifyCartQuantity,getUserCart,removeFromCart, addToCart } from "../controllers/cart.controller.js";
 import { verifyUser } from "../middlewares/verifyUser.js";
+import { verifyAuth } from "../middlewares/verifyAuth.js";
+import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 
 
 const cartRouter = express.Router();
 
-cartRouter.get('/',verifyUser,getUserCart)
+cartRouter.get('/',verifyAuth, authorizeRoles("user"),getUserCart)
 
-cartRouter.post('/modify',verifyUser,modifyCartQuantity)
+cartRouter.post('/modify',verifyAuth, authorizeRoles("user"),modifyCartQuantity)
 
-cartRouter.delete('/remove/:itemId',verifyUser,removeFromCart)
+cartRouter.delete('/remove/:itemId',verifyAuth, authorizeRoles("user"),removeFromCart)
 
-cartRouter.post('/add',verifyUser,addToCart)
+cartRouter.post('/add',verifyAuth, authorizeRoles("user"),addToCart)
 
 
 export default cartRouter;

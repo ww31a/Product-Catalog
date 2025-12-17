@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js';
-import AppUser from "../models/appUser.module.js";
+import AppUser from "../models/AppUser.module.js";
 
 
 export const sellerRegister = async (req, res) => {
