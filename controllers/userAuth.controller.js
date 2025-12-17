@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js';
 import AppUser from "../models/AppUser.module.js";
+import User from "../models/user.module.js";
 import { mergeGuestCartIntoUserCart } from "../utils/mergeCart.js";
 
 export const userRegister = async (req, res) => {
@@ -25,6 +26,10 @@ export const userRegister = async (req, res) => {
       email,
       password: hash,
       roles: ["user"]
+    });
+
+    await User.create({
+      userId: newUser._id,
     });
 
     res.status(201).json({
