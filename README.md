@@ -120,11 +120,17 @@ Product-Catalog/
 - `/api/orders` - Order processing
 
 ## Contributors
+## Contributors
+
 **Frontend Development:**
+
 <a href="https://github.com/ww31b">
   <img src="https://github.com/ww31b.png" width="50" height="50" alt="ww31b"/>
 </a>
- [Fazila_Sohail/https://github.com/ww31a/Product-Catalog]
+
+**Fazila Sohail**
+
+[https://github.com/ww31a/Product-Catalog](https://github.com/ww31a/Product-Catalog)
 
 ## Contact
 
