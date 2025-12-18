@@ -9,7 +9,7 @@ export const userRegister = async (req, res) => {
     const { name, password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    // Check if user already exists
+    // 1. Check if AppUser already exists
     const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({
@@ -18,9 +18,10 @@ export const userRegister = async (req, res) => {
       });
     }
 
+    // 2. Hash password
     const hash = await bcrypt.hash(password, 10);
 
-    // Create new AppUser with role 'user'
+    // 3. Create AppUser
     const newUser = await AppUserService.create({
       name,
       email,
@@ -28,18 +29,19 @@ export const userRegister = async (req, res) => {
       roles: ["user"]
     });
 
+    // 4. Create User profile (CRITICAL)
     await UserService.create({
-      userId: newUser._id,
+      userId: newUser._id
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "User registered successfully. Please login to continue."
     });
 
   } catch (err) {
     console.error("userRegister error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message
     });
@@ -51,7 +53,7 @@ export const userLogin = async (req, res) => {
     const { password, guestCart } = req.body;
     const email = req.body.email.toLowerCase();
 
-    // Find user with role 'user'
+    // 1. Find AppUser with user role
     const user = await AppUserService.findByEmailWithRole(email, "user");
     if (!user) {
       return res.status(404).json({
@@ -60,7 +62,7 @@ export const userLogin = async (req, res) => {
       });
     }
 
-    // Compare password
+    // 2. Validate password
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res.status(400).json({
@@ -69,19 +71,28 @@ export const userLogin = async (req, res) => {
       });
     }
 
-    // Merge guest cart if exists
-    if (guestCart?.length > 0) {
+    // 3. Ensure User profile exists (CRITICAL)
+    const userProfile = await UserService.findByUserId(user._id);
+    if (!userProfile) {
+      return res.status(403).json({
+        success: false,
+        message: "User profile not initialized"
+      });
+    }
+
+    // 4. Merge guest cart safely
+    if (Array.isArray(guestCart) && guestCart.length > 0) {
       await mergeGuestCartIntoUserCart(user._id, guestCart);
     }
 
-    // Generate JWT with roles array (backward compatible)
+    // 5. Generate JWT
     const token = generateToken({
       id: user._id,
-      role: "user", // legacy for old frontend
-      roles: user.roles
+      role: "user",     // legacy
+      roles: user.roles // future-proof
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Login successful",
       token,
@@ -91,7 +102,7 @@ export const userLogin = async (req, res) => {
 
   } catch (err) {
     console.error("userLogin error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message
     });

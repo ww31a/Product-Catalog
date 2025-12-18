@@ -3,27 +3,43 @@ import ProductService from './product.service.js';
 import OrderService from './order.service.js';
 import UserService from './user.service.js';
 import StockHistoryService from './stockHistory.service.js';
+import AppUserService from './appUser.service.js';
 
 class SuperAdminManagementService {
-  // Get all sellers with pagination and search
+
   async getAllSellers(query, page = 1, limit = 10) {
     const sellers = await SellerService.findWithPagination(
       query,
       { createdAt: -1 },
       (page - 1) * limit,
       limit * 1,
-      "-password"
+      "" // no need to exclude anything from Seller itself
     );
 
+    // Step 2: Populate name and email from AppUser
+    const populatedSellers = await Promise.all(
+      sellers.map(async seller => {
+        const user = await AppUserService.findById(seller.userId, "name email");
+        return {
+          _id: seller._id,
+          status: seller.status || "active", // optional if you have status field
+          name: user?.name || "",
+          email: user?.email || ""
+        };
+      })
+    );
+
+    // Step 3: Count total sellers for pagination
     const count = await SellerService.countDocuments(query);
 
     return {
-      sellers,
+      sellers: populatedSellers,
       totalPages: Math.ceil(count / limit),
       currentPage: Number(page),
       total: count
     };
   }
+
 
   // Delete a seller and all associated data
   async deleteSeller(sellerId) {
@@ -139,23 +155,37 @@ class SuperAdminManagementService {
 
   // Get all users with pagination and search
   async getAllUsers(query, page = 1, limit = 10) {
+    // 1️⃣ Find paginated users
     const users = await UserService.findWithPagination(
       query,
       { createdAt: -1 },
       (page - 1) * limit,
-      limit * 1,
-      "-password -cartData"
+      limit
     );
 
     const count = await UserService.countDocuments(query);
 
+    // 2️⃣ Populate name & email from AppUser
+    const populatedUsers = await Promise.all(
+      users.map(async (u) => {
+        const appUser = await AppUserService.findById(u.userId);
+        return {
+          _id: u._id,
+          name: appUser?.name || null,
+          email: appUser?.email || null,
+          createdAt: u.createdAt
+        };
+      })
+    );
+
     return {
-      users,
+      users: populatedUsers,
       totalPages: Math.ceil(count / limit),
       currentPage: Number(page),
       total: count
     };
   }
+
 
   // Get all products with pagination, search, and populate
   async getAllProducts(query, page = 1, limit = 10) {

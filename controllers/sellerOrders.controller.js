@@ -1,5 +1,7 @@
 import OrderService from "../services/order.service.js";
 import ProductService from "../services/product.service.js";
+import UserService from '../services/user.service.js'
+import AppUserService from "../services/appUser.service.js";
 
 export const getSellerOrders = async (req, res) => {
   try {
@@ -38,37 +40,34 @@ export const getSellerOrders = async (req, res) => {
 
 export const updateOrderStatus = async (req, res) => {
   try {
-    const sellerId = req.auth.userId;
+    const sellerId = req.auth.userId; // AppUser._id
     const { orderId, status } = req.body;
 
     const order = await OrderService.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (order.status === "cancelled") return res.status(400).json({ success: false, message: "Cannot update a cancelled order" });
+
+    // ✅ Check if user is a seller
+    const sellerUser = await AppUserService.findById(sellerId);
+    if (!sellerUser || !sellerUser.roles.includes("seller")) {
+      return res.status(403).json({ success: false, message: "Not a seller" });
     }
 
-    if (order.status === "cancelled") {
-      return res.status(400).json({ success: false, message: "Cannot update a cancelled order" });
-    }
-
-    // Get seller's product IDs
+    // ✅ Get all products owned by this seller
     const sellerProducts = await ProductService.findByOwnerWithSelect(sellerId, "_id");
     const ownedIds = sellerProducts.map(p => p._id.toString());
 
-    // Check if order contains any of seller's products
-    const hasProduct = order.items.some(item =>
-      ownedIds.includes(item._id.toString())
-    );
+    // ✅ Check if order contains seller's product
+    const hasProduct = order.items.some(item => ownedIds.includes(item._id.toString()));
+    if (!hasProduct) return res.status(403).json({ success: false, message: "Not allowed to update this order" });
 
-    if (!hasProduct) {
-      return res.status(403).json({ success: false, message: "Not allowed to update this order" });
-    }
-
+    // ✅ Update status
     const updatedOrder = await OrderService.updateStatus(order._id, status);
 
-    res.status(200).json({ 
-      success: true, 
-      message: "Order status updated successfully", 
-      order: updatedOrder 
+    res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      order: updatedOrder
     });
   } catch (err) {
     console.error("updateOrderStatus error:", err.message);

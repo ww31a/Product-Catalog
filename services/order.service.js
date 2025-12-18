@@ -49,21 +49,38 @@ class OrderService {
     return await Order.find(filter).sort(sort);
   }
 
-  async updateStatus(orderId, status) {
+  // async updateStatus(orderId, status) {
+  //   return await Order.findOneAndUpdate(
+  //     { orderId },
+  //     { status },
+  //     { new: true, runValidators: true }
+  //   );
+  // }
+
+  // async updatePaymentStatus(orderId, payment) {
+  //   return await Order.findOneAndUpdate(
+  //     { orderId },
+  //     { payment },
+  //     { new: true }
+  //   );
+  // }
+
+  async updateStatus(id, status) {
     return await Order.findOneAndUpdate(
-      { orderId },
+      { _id: id },           // ✅ filter object
       { status },
       { new: true, runValidators: true }
     );
   }
 
-  async updatePaymentStatus(orderId, payment) {
+  async updatePaymentStatus(id, payment) {
     return await Order.findOneAndUpdate(
-      { orderId },
+      { _id: id },           // ✅ filter object
       { payment },
       { new: true }
     );
   }
+
 
   async findByStatus(status) {
     return await Order.find({ status }).sort({ createdAt: -1 });
@@ -101,19 +118,26 @@ class OrderService {
   }
 
   async getBestSellingProductsForSeller(productIds, dateThreshold, limit = 10) {
+    // Convert all productIds to strings to match order items
+    const productIdsStr = productIds.map(id => id.toString());
+
     return await Order.aggregate([
+      // Only delivered orders after the date threshold
       {
         $match: {
           status: 'delivered',
           createdAt: { $gte: dateThreshold }
         }
       },
+      // Deconstruct items array
       { $unwind: '$items' },
+      // Match only items that belong to this seller
       {
         $match: {
-          'items._id': { $in: productIds }
+          'items._id': { $in: productIdsStr }
         }
       },
+      // Group by item _id to calculate stats
       {
         $group: {
           _id: '$items._id',
@@ -124,10 +148,13 @@ class OrderService {
           }
         }
       },
+      // Sort by quantity sold descending
       { $sort: { totalSold: -1 } },
+      // Limit to top N products
       { $limit: limit }
     ]);
   }
+
 
   async findOrdersContainingProducts(productIds) {
     return await Order.find({
