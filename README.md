@@ -122,7 +122,7 @@ Product-Catalog/
 ## Contributors
 
 <a href="https://github.com/ww31b">
-  <img src="[https://github.com/ww31b.png](https://github.com/ww31b)" width="50" height="50" alt="ww31b"/>
+  <img src="https://github.com/ww31b.png" width="50" height="50" alt="ww31b"/>
 </a>
 **Frontend Development:** [Fazila_Sohail/https://github.com/ww31a/Product-Catalog]
 
