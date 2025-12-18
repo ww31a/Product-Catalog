@@ -130,7 +130,7 @@ Product-Catalog/
 
 **Fazila Sohail**
 
-[https://github.com/ww31a/Product-Catalog](https://github.com/ww31b/Mini-Product-Catalog-Frontend)
+[https://github.com/ww31b/Product-Catalog-Frontend](https://github.com/ww31b/Mini-Product-Catalog-Frontend)
 
 ## Contact
 
