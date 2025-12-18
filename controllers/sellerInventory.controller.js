@@ -1,12 +1,4 @@
-import mongoose from 'mongoose';
-import ProductService from '../services/product.service.js';
-import StockHistoryService from '../services/stockHistory.service.js';
-import OrderService from '../services/order.service.js';
-
-const getSellerProductIds = async (sellerId) => {
-  const products = await ProductService.findByOwnerWithSelect(sellerId, '_id');
-  return products.map(p => p._id);
-};
+import SellerInventoryService from '../services/sellerInventory.service.js';
 
 export const getBestSellingProducts = async (req, res) => {
   try {
@@ -14,46 +6,11 @@ export const getBestSellingProducts = async (req, res) => {
     const days = parseInt(req.query.days, 10) || 30;
     const limit = parseInt(req.query.limit, 10) || 10;
 
-    const dateThreshold = new Date();
-    dateThreshold.setDate(dateThreshold.getDate() - days);
-
-    const sellerProductIds = await getSellerProductIds(sellerId);
-
-    const bestSellers = await OrderService.getBestSellingProductsForSeller(
-      sellerProductIds,
-      dateThreshold,
+    const result = await SellerInventoryService.getBestSellingProducts(
+      sellerId,
+      days,
       limit
     );
-
-    const productIds = bestSellers.map(item => item._id);
-
-    const products = await ProductService.findByOwnerAndIdsWithSelect(
-      sellerId,
-      productIds,
-      'title brand price stock image'
-    );
-
-    const result = bestSellers.map(stat => {
-      const product = products.find(
-        p => p._id.toString() === stat._id.toString()
-      );
-
-      return {
-        product: product
-          ? {
-              _id: product._id,
-              title: product.title,
-              brand: product.brand,
-              price: product.price,
-              stock: product.stock,
-              image: product.image
-            }
-          : null,
-        totalSold: stat.totalSold,
-        salesCount: stat.salesCount,
-        revenue: stat.totalRevenue
-      };
-    });
 
     res.json({
       success: true,
@@ -72,7 +29,7 @@ export const getLowStockAlert = async (req, res) => {
     const sellerId = req.auth.userId;
     const threshold = 5;
 
-    const products = await ProductService.findLowStockByOwner(
+    const products = await SellerInventoryService.getLowStockProducts(
       sellerId,
       threshold
     );
@@ -94,7 +51,7 @@ export const getOutOfStockAlert = async (req, res) => {
   try {
     const sellerId = req.auth.userId;
 
-    const products = await ProductService.findOutOfStockByOwner(sellerId);
+    const products = await SellerInventoryService.getOutOfStockProducts(sellerId);
 
     res.json({
       success: true,
@@ -110,7 +67,7 @@ export const getInStockAlert = async (req, res) => {
     const sellerId = req.auth.userId;
     const threshold = 5;
 
-    const products = await ProductService.findInStockByOwner(
+    const products = await SellerInventoryService.getInStockProducts(
       sellerId,
       threshold
     );
@@ -133,62 +90,11 @@ export const getStockSummary = async (req, res) => {
     const sellerId = req.auth.userId;
     const threshold = 5;
 
-    const totalProducts = await ProductService.countByOwner(sellerId);
-    const outOfStock = await ProductService.countOutOfStockByOwner(sellerId);
-    const lowStock = await ProductService.countLowStockByOwner(
-      sellerId,
-      threshold
-    );
-    const inStock = await ProductService.countInStockByOwner(
-      sellerId,
-      threshold
-    );
-
-    const inventoryValue = await ProductService.getInventoryValueByOwner(
-      sellerId
-    );
-
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const sellerProductIds = await getSellerProductIds(sellerId);
-
-    const recentChanges = await StockHistoryService.countByProductIds(
-      sellerProductIds,
-      sevenDaysAgo
-    );
-
-    const recentIncreases = await StockHistoryService.countByProductIdsAndType(
-      sellerProductIds,
-      'add',
-      sevenDaysAgo
-    );
-
-    const recentDecreases = await StockHistoryService.countByProductIdsAndType(
-      sellerProductIds,
-      'remove',
-      sevenDaysAgo
-    );
+    const data = await SellerInventoryService.getStockSummary(sellerId, threshold);
 
     res.json({
       success: true,
-      data: {
-        stockStatus: {
-          totalProducts,
-          inStock,
-          lowStock,
-          outOfStock
-        },
-        inventoryValue: {
-          totalValue: inventoryValue.totalValue || 0,
-          totalUnits: inventoryValue.totalUnits || 0
-        },
-        recentActivity: {
-          last7Days: recentChanges,
-          increases: recentIncreases,
-          decreases: recentDecreases
-        }
-      }
+      data
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -200,33 +106,15 @@ export const getDeadStock = async (req, res) => {
     const sellerId = req.auth.userId;
     const days = parseInt(req.query.days, 10) || 20;
 
-    const dateThreshold = new Date();
-    dateThreshold.setDate(dateThreshold.getDate() - days);
-
-    const sellerProductIds = await getSellerProductIds(sellerId);
-
-    const recentlyChangedProducts = await StockHistoryService.getDistinctProductIds(
-      sellerProductIds,
-      dateThreshold
-    );
-
-    const deadStockProducts = await ProductService.findDeadStock(
-      sellerProductIds,
-      recentlyChangedProducts
-    );
-
-    const deadStockValue = deadStockProducts.reduce(
-      (sum, product) => sum + product.price * product.stock,
-      0
-    );
+    const result = await SellerInventoryService.getDeadStock(sellerId, days);
 
     res.json({
       success: true,
       data: {
         period: `${days} days`,
-        count: deadStockProducts.length,
-        totalValue: deadStockValue,
-        products: deadStockProducts
+        count: result.count,
+        totalValue: result.totalValue,
+        products: result.products
       }
     });
   } catch (error) {

@@ -1,6 +1,8 @@
 import bcrypt from "bcrypt";
 import { generateToken } from '../utils/generateToken.js';
 import AppUserService from "../services/appUser.service.js";
+import sellerService from "../services/seller.service.js";
+
 
 export const sellerRegister = async (req, res) => {
   try {
@@ -23,6 +25,10 @@ export const sellerRegister = async (req, res) => {
       email,
       password: hash,
       roles: ["seller"]
+    });
+
+    await sellerService.create({
+      userId: newSeller._id,
     });
 
     res.status(201).json({
