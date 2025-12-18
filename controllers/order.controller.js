@@ -1,8 +1,8 @@
-import Order from "../models/order.module.js";
-import User from "../models/user.module.js";
-import Product from "../models/products.module.js";
-import stockHistory from "../models/stockHistory.module.js";
 import Stripe from 'stripe';
+import OrderService from "../services/order.service.js";
+import UserService from "../services/user.service.js";
+import ProductService from "../services/product.service.js";
+import StockHistoryService from "../services/stockHistory.service.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const currency = 'pkr';
@@ -14,8 +14,9 @@ const placeOrderCOD = async (req, res) => {
         const userId = req.auth.userId;
         const { items, amount, address } = req.body;
 
+        // Validate stock availability
         for (const item of items) {
-            const product = await Product.findById(item._id);
+            const product = await ProductService.findById(item._id);
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${item.title}` });
             }
@@ -34,14 +35,14 @@ const placeOrderCOD = async (req, res) => {
             date: Date.now()
         };
 
-        const newOrder = new Order(orderData);
-        await newOrder.save();
+        const newOrder = await OrderService.create(orderData);
 
+        // Process stock reduction and history
         for (const item of items) {
-            const product = await Product.findById(item._id);
+            const product = await ProductService.findById(item._id);
 
             if (!product || product.stock < item.quantity) {
-                await Order.findByIdAndDelete(newOrder._id);
+                await OrderService.delete(newOrder._id);
                 return res.status(400).json({
                     success: false,
                     message: `Not enough stock for product: ${product?.title || item._id}`,
@@ -49,11 +50,10 @@ const placeOrderCOD = async (req, res) => {
             }
 
             const previousStock = product.stock;
-            product.stock -= item.quantity;
-            const newStock = product.stock;
-            await product.save();
+            await ProductService.decrementStock(product._id, item.quantity);
+            const newStock = previousStock - item.quantity;
 
-            await stockHistory.create({
+            await StockHistoryService.create({
                 productId: product._id,
                 previousStock,
                 newStock,
@@ -66,7 +66,7 @@ const placeOrderCOD = async (req, res) => {
             });
         }
 
-        await User.findByIdAndUpdate(userId, { cartData: {} });
+        await UserService.clearCart(userId);
 
         res.status(200).json({
             success: true,
@@ -85,8 +85,9 @@ const placeOrderStripe = async (req, res) => {
         const { items, amount, address } = req.body;
         const { origin } = req.headers;
 
+        // Validate stock availability
         for (const item of items) {
-            const product = await Product.findById(item._id);
+            const product = await ProductService.findById(item._id);
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${item.title}` });
             }
@@ -97,10 +98,7 @@ const placeOrderStripe = async (req, res) => {
 
         const subtotal = amount;
         const tax = subtotal * taxRate;
-
-
         const orderTotal = subtotal + deliveryCharges + tax;
-
 
         const orderData = {
             userId,
@@ -112,10 +110,9 @@ const placeOrderStripe = async (req, res) => {
             date: Date.now()
         };
 
-        const newOrder = new Order(orderData);
-        await newOrder.save();
+        const newOrder = await OrderService.create(orderData);
 
-
+        // Build Stripe line items
         const line_items = items.map((item) => ({
             price_data: {
                 currency,
@@ -144,7 +141,7 @@ const placeOrderStripe = async (req, res) => {
                 product_data: {
                     name: "Tax (5%)",
                 },
-                unit_amount: tax * 100,
+                unit_amount: Math.round(tax * 100),
             },
             quantity: 1
         });
@@ -168,35 +165,35 @@ const verifyStripe = async (req, res) => {
     const { success, orderId } = req.body;
 
     try {
-        const order = await Order.findById(orderId);
+        const order = await OrderService.findById(orderId);
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
 
         if (success === "true" || success === true) {
+            // Process stock reduction
             for (const item of order.items) {
-                const product = await Product.findById(item._id);
+                const product = await ProductService.findById(item._id);
 
                 if (!product) {
-                    await Order.findByIdAndDelete(orderId);
+                    await OrderService.delete(orderId);
                     return res.status(404).json({
                         message: `Product not found: ${item.title}`
                     });
                 }
 
                 if (product.stock < item.quantity) {
-                    await Order.findByIdAndDelete(orderId);
+                    await OrderService.delete(orderId);
                     return res.status(400).json({
                         message: `Not enough stock for ${product.title}`
                     });
                 }
 
                 const previousStock = product.stock;
-                product.stock -= item.quantity;
-                const newStock = product.stock;
-                await product.save();
+                await ProductService.decrementStock(product._id, item.quantity);
+                const newStock = previousStock - item.quantity;
 
-                await stockHistory.create({
+                await StockHistoryService.create({
                     productId: product._id,
                     previousStock,
                     newStock,
@@ -209,15 +206,15 @@ const verifyStripe = async (req, res) => {
                 });
             }
 
-            await Order.findByIdAndUpdate(orderId, { payment: true });
-            await User.findByIdAndUpdate(userId, { cartData: {} });
+            await OrderService.updatePaymentStatus(orderId, true);
+            await UserService.clearCart(userId);
 
             res.json({
                 success: true,
                 message: 'Payment verified successfully'
             });
         } else {
-            await Order.findByIdAndDelete(orderId);
+            await OrderService.delete(orderId);
             res.json({
                 success: false,
                 message: 'Payment cancelled or failed'
@@ -233,10 +230,10 @@ const getUserOrders = async (req, res) => {
     try {
         const userId = req.auth.userId;
 
-        const orders = await Order.find({
+        const orders = await OrderService.findAll({
             userId,
             $or: [{ paymentMethod: "COD" }, { payment: true }]
-        }).sort({ createdAt: -1 });
+        });
 
         res.status(200).json({ orders });
     } catch (err) {
@@ -249,7 +246,7 @@ const cancelOrder = async (req, res) => {
         const userId = req.auth.userId;
         const { orderId } = req.body;
 
-        const order = await Order.findById(orderId);
+        const order = await OrderService.findById(orderId);
 
         if (!order) {
             return res.status(404).json({ message: "Order not found" });
@@ -265,16 +262,16 @@ const cancelOrder = async (req, res) => {
             });
         }
 
+        // Restore stock
         for (const item of order.items) {
-            const product = await Product.findById(item._id);
+            const product = await ProductService.findById(item._id);
 
             if (product) {
                 const previousStock = product.stock;
-                product.stock += item.quantity;
-                const newStock = product.stock;
-                await product.save();
+                await ProductService.incrementStock(product._id, item.quantity);
+                const newStock = previousStock + item.quantity;
 
-                await stockHistory.create({
+                await StockHistoryService.create({
                     productId: product._id,
                     previousStock,
                     newStock,
@@ -288,13 +285,12 @@ const cancelOrder = async (req, res) => {
             }
         }
 
-        order.status = "cancelled";
-        await order.save();
+        const updatedOrder = await OrderService.updateStatus(order._id, "cancelled");
 
         res.status(200).json({
             success: true,
             message: "Order cancelled successfully",
-            order
+            order: updatedOrder
         });
     } catch (err) {
         res.status(500).json({ message: err.message });

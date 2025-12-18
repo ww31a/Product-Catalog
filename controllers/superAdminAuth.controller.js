@@ -1,13 +1,13 @@
 import bcrypt from "bcrypt";
 import { generateToken } from "../utils/generateToken.js";
-import SuperAdmin from '../models/superAdmin.module.js';
+import SuperAdminService from '../services/superAdmin.service.js';
 
 export const superAdminLogin = async (req, res) => {
   try {
     const { password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    const superAdmin = await SuperAdmin.findOne({ email });
+    const superAdmin = await SuperAdminService.findByEmail(email);
     if (!superAdmin) {
       return res.status(404).json({ success: false, message: "Super Admin not found" });
     }
@@ -47,7 +47,7 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
     }
 
-    const superAdmin = await SuperAdmin.findById(superAdminId);
+    const superAdmin = await SuperAdminService.findById(superAdminId);
     if (!superAdmin) {
       return res.status(404).json({ success: false, message: "Super Admin not found" });
     }
@@ -63,8 +63,7 @@ export const changePassword = async (req, res) => {
     }
 
     const hash = await bcrypt.hash(newPassword, 10);
-    superAdmin.password = hash;
-    await superAdmin.save();
+    await SuperAdminService.updatePassword(superAdminId, hash);
 
     res.status(200).json({
       success: true,
@@ -79,7 +78,7 @@ export const getSuperAdminProfile = async (req, res) => {
   try {
     const superAdminId = req.user.id;
 
-    const superAdmin = await SuperAdmin.findById(superAdminId).select("-password");
+    const superAdmin = await SuperAdminService.findByIdWithSelect(superAdminId, "-password");
     if (!superAdmin) {
       return res.status(404).json({ success: false, message: "Super Admin not found" });
     }

@@ -3,7 +3,7 @@ import Product from "../models/products.module.js";
 import mongoose from "mongoose";
 
 export const mergeGuestCartIntoUserCart = async (userId, guestCart) => {
-  const user = await User.findById(userId);
+const user = await User.findOne({ userId });
 
   if (!user.cartData) user.cartData = {};
   const existingCart = user.cartData;
