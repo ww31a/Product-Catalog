@@ -31,7 +31,7 @@ jobs:
           if npm test -- --watchAll=false; then
             echo "Tests passed!"
           else
-            echo "No tests found or some tests failed, continuin..."
+            echo "No tests found or some tests failed, continuing..."
           fi
 
       - name: Success message
