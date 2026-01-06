@@ -84,7 +84,7 @@ export const getInStockAlert = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+//ss
 export const getStockSummary = async (req, res) => {
   try {
     const sellerId = req.auth.userId;
