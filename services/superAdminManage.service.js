@@ -8,51 +8,29 @@ import AppUserService from './appUser.service.js';
 class SuperAdminManagementService {
 
   async getAllSellers(query, page = 1, limit = 10) {
-    let sellerQuery = {};
-
-    // If there's a search term, first find matching AppUsers
-    if (query.$or) {
-      const matchingUsers = await AppUserService.find(
-        {
-          roles: "seller",
-          $or: query.$or
-        },
-        "_id"
-      );
-
-      const userIds = matchingUsers.map(u => u._id);
-      sellerQuery.userId = { $in: userIds };
-    }
-
-    // If there's a status filter, add it to seller query
-    if (query.status) {
-      sellerQuery.status = query.status;
-    }
-
-    // Get sellers with pagination
     const sellers = await SellerService.findWithPagination(
-      sellerQuery,
+      query,
       { createdAt: -1 },
       (page - 1) * limit,
       limit * 1,
-      ""
+      "" // no need to exclude anything from Seller itself
     );
 
-    // Populate name and email from AppUser
+    // Step 2: Populate name and email from AppUser
     const populatedSellers = await Promise.all(
       sellers.map(async seller => {
         const user = await AppUserService.findById(seller.userId, "name email");
         return {
           _id: seller._id,
-          status: seller.status || "active",
+          status: seller.status || "active", // optional if you have status field
           name: user?.name || "",
           email: user?.email || ""
         };
       })
     );
 
-    // Count total sellers matching the criteria
-    const count = await SellerService.countDocuments(sellerQuery);
+    // Step 3: Count total sellers for pagination
+    const count = await SellerService.countDocuments(query);
 
     return {
       sellers: populatedSellers,
@@ -177,38 +155,20 @@ class SuperAdminManagementService {
 
   // Get all users with pagination and search
   async getAllUsers(query, page = 1, limit = 10) {
-    let userQuery = {};
-
-    // If there's a search term, first find matching AppUsers
-    if (query.$or) {
-      const matchingAppUsers = await AppUserService.find(
-        {
-          roles: "user",
-          $or: query.$or
-        },
-        "_id"
-      );
-
-      const appUserIds = matchingAppUsers.map(u => u._id);
-      userQuery.userId = { $in: appUserIds };
-    }
-
-    // Add any other filters from the original query (except $or)
-    const { $or, ...otherFilters } = query;
-    userQuery = { ...userQuery, ...otherFilters };
-
-    // Get users with pagination
+    // 1️⃣ Find paginated users
     const users = await UserService.findWithPagination(
-      userQuery,
+      query,
       { createdAt: -1 },
       (page - 1) * limit,
       limit
     );
 
-    // Populate name & email from AppUser
+    const count = await UserService.countDocuments(query);
+
+    // 2️⃣ Populate name & email from AppUser
     const populatedUsers = await Promise.all(
       users.map(async (u) => {
-        const appUser = await AppUserService.findById(u.userId, "name email");
+        const appUser = await AppUserService.findById(u.userId);
         return {
           _id: u._id,
           name: appUser?.name || null,
@@ -218,9 +178,6 @@ class SuperAdminManagementService {
       })
     );
 
-    // Count total users matching the criteria
-    const count = await UserService.countDocuments(userQuery);
-
     return {
       users: populatedUsers,
       totalPages: Math.ceil(count / limit),
@@ -228,6 +185,7 @@ class SuperAdminManagementService {
       total: count
     };
   }
+
 
   // Get all products with pagination, search, and populate
   async getAllProducts(query, page = 1, limit = 10) {

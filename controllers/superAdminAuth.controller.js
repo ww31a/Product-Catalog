@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import { generateToken } from "../utils/generateToken.js";
 import SuperAdminService from '../services/superAdmin.service.js';
-//ss
+
 export const superAdminLogin = async (req, res) => {
   try {
     const { password } = req.body;

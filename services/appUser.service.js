@@ -6,10 +6,6 @@ class AppUserService {
     return await AppUser.findById(id);
   }
 
-  async find(filter = {}, selectFields = "") {
-  return await AppUser.find(filter).select(selectFields);
-}
-
   // USED: auth controllers
   async findByEmail(email) {
     return await AppUser.findOne({ email: email.toLowerCase() });

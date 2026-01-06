@@ -3,7 +3,7 @@ import OrderService from "../services/order.service.js";
 import UserService from "../services/user.service.js";
 import ProductService from "../services/product.service.js";
 import StockHistoryService from "../services/stockHistory.service.js";
-//dd
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const currency = 'pkr';
 const deliveryCharges = 200;
