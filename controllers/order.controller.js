@@ -14,7 +14,8 @@ const placeOrderCOD = async (req, res) => {
         const userId = req.auth.userId;
         const { items, amount, address } = req.body;
 
-        // Validate stock availability
+        // Validate stock availability and enrich items with sellerId
+        const enrichedItems = [];
         for (const item of items) {
             const product = await ProductService.findById(item._id);
             if (!product) {
@@ -23,11 +24,17 @@ const placeOrderCOD = async (req, res) => {
             if (product.stock < item.quantity) {
                 return res.status(400).json({ message: `Not enough stock for ${product.title}` });
             }
+
+            // Attach sellerId so frontend can open chat with seller per item
+            enrichedItems.push({
+                ...item,
+                sellerId: product.owner?.toString() || product.owner
+            });
         }
 
         const orderData = {
             userId,
-            items,
+            items: enrichedItems,
             amount,
             address,
             paymentMethod: "COD",
@@ -38,7 +45,7 @@ const placeOrderCOD = async (req, res) => {
         const newOrder = await OrderService.create(orderData);
 
         // Process stock reduction and history
-        for (const item of items) {
+        for (const item of enrichedItems) {
             const product = await ProductService.findById(item._id);
 
             if (!product || product.stock < item.quantity) {
@@ -85,7 +92,8 @@ const placeOrderStripe = async (req, res) => {
         const { items, amount, address } = req.body;
         const { origin } = req.headers;
 
-        // Validate stock availability
+        // Validate stock availability and enrich items with sellerId
+        const enrichedItems = [];
         for (const item of items) {
             const product = await ProductService.findById(item._id);
             if (!product) {
@@ -94,6 +102,11 @@ const placeOrderStripe = async (req, res) => {
             if (product.stock < item.quantity) {
                 return res.status(400).json({ message: `Not enough stock for ${product.title}` });
             }
+
+            enrichedItems.push({
+                ...item,
+                sellerId: product.owner?.toString() || product.owner
+            });
         }
 
         const subtotal = amount;
@@ -102,7 +115,7 @@ const placeOrderStripe = async (req, res) => {
 
         const orderData = {
             userId,
-            items,
+            items: enrichedItems,
             amount: orderTotal,
             address,
             paymentMethod: "Stripe",
@@ -113,7 +126,7 @@ const placeOrderStripe = async (req, res) => {
         const newOrder = await OrderService.create(orderData);
 
         // Build Stripe line items
-        const line_items = items.map((item) => ({
+        const line_items = enrichedItems.map((item) => ({
             price_data: {
                 currency,
                 product_data: {
@@ -235,7 +248,50 @@ const getUserOrders = async (req, res) => {
             $or: [{ paymentMethod: "COD" }, { payment: true }]
         });
 
-        res.status(200).json({ orders });
+        // Ensure each item has sellerId (for older orders created before this field was stored)
+        const productOwnerCache = new Map();
+
+        const enrichedOrders = [];
+        for (const order of orders) {
+            const enrichedItems = [];
+
+            for (const item of order.items) {
+                // If sellerId already present, keep as is
+                if (item.sellerId) {
+                    enrichedItems.push(item);
+                    continue;
+                }
+
+                const productId = item._id?.toString();
+                if (!productId) {
+                    enrichedItems.push(item);
+                    continue;
+                }
+
+                // Try cache first
+                let ownerId = productOwnerCache.get(productId);
+
+                if (!ownerId) {
+                    const product = await ProductService.findById(productId);
+                    if (product) {
+                        ownerId = product.owner?.toString() || product.owner;
+                        productOwnerCache.set(productId, ownerId);
+                    }
+                }
+
+                enrichedItems.push({
+                    ...item.toObject?.() ? item.toObject() : item,
+                    sellerId: ownerId || item.sellerId
+                });
+            }
+
+            enrichedOrders.push({
+                ...order.toObject(),
+                items: enrichedItems
+            });
+        }
+
+        res.status(200).json({ orders: enrichedOrders });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
