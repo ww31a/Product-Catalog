@@ -29,7 +29,10 @@ const storage = new CloudinaryStorage({
       };
       return mimeMap[file.mimetype] || "jpg";
     },
-    public_id: (req, file) => `${Date.now()}_${file.originalname}`,
+    public_id: (req, file) => {
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9-_\.]/g, "_");
+      return `${Date.now()}_${safeName}`;
+    }
   },
 });
 
