@@ -4,6 +4,8 @@ import { dirname, join } from "path";
 
 dotenv.config();
 import express from 'express';
+import http from "http";
+import { Server } from "socket.io";
 import connectDB from './database/mongodb.js';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -15,6 +17,8 @@ import cartRouter from './routes/cart.routes.js';
 import orderRouter from './routes/order.routes.js';
 import inventoryRouter from './routes/inventory.routes.js';
 import superAdminRouter from './routes/superAdmin.routes.js';
+import chatRouter from './routes/chat.routes.js';
+import { initializeSocketHandlers } from './utils/socketHandler.js';
 
 
 
@@ -54,6 +58,7 @@ app.use('/api/cart',cartRouter)
 app.use('/api/order',orderRouter)
 app.use('/api/inventory',inventoryRouter)
 app.use('/api/superadmin',superAdminRouter)
+app.use('/api/chat',chatRouter)
 
 // Serve React frontend in production
 if (process.env.NODE_ENV === "production") {
@@ -71,7 +76,23 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    app.listen(PORT, "0.0.0.0", () => {
+    // Wrap Express app in HTTP server
+    const httpServer = http.createServer(app);
+
+    // Initialize Socket.IO
+    const io = new Server(httpServer, {
+      cors: {
+        origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
+        methods: ["GET", "POST"],
+        credentials: true,
+      },
+    });
+
+    // Initialize chat socket handlers
+    initializeSocketHandlers(io);
+
+    // Start HTTP server (not app.listen)
+    httpServer.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   } catch (err) {
@@ -80,5 +101,6 @@ const startServer = async () => {
 };
 
 startServer();
+
 
 

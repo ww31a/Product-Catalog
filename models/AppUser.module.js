@@ -27,10 +27,11 @@ const appUserSchema = new mongoose.Schema(
             default: ["user"]
         },
 
-        isActive: {
+        isVerified: {
             type: Boolean,
-            default: true
-        }
+            default: false
+        },
+        verificationCode: String
     },
     { timestamps: true, minimize: false }
 );
