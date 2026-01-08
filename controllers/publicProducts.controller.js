@@ -81,7 +81,7 @@ export const getProductByID = async (req, res) => {
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    const product = await ProductService.findByIdWithSelect(id, "-owner");
+    const product = await ProductService.findByIdWithSelect(id);
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
