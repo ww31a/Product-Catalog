@@ -135,13 +135,30 @@ export const userLogin = async (req, res) => {
 
 export const verifyEmail = async (req, res) => {
   try {
-    const { code } = req.body;
+    const { otp, email } = req.body; // ✅ FIXED: Get email from request
     
-    const user = await AppUserService.verifyCode(code);
+    if (!otp || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and verification code are required"
+      });
+    }
+
+    // ✅ FIXED: Find user by BOTH email and verification code
+    const user = await AppUserService.findByEmailAndCode(email.toLowerCase(), otp);
+    
     if (!user) {
       return res.status(400).json({
         success: false,
         message: "Invalid or expired verification code"
+      });
+    }
+
+    // ✅ FIXED: Verify this is a user, not a seller
+    if (!user.roles.includes("user")) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid user type"
       });
     }
 
@@ -150,19 +167,11 @@ export const verifyEmail = async (req, res) => {
     user.verificationCode = undefined;
     await user.save();
 
-    // Generate token after successful verification
-    const token = generateToken({
-      id: user._id,
-      role: "user",
-      roles: user.roles
-    });
-
+    // ✅ FIXED: Don't return token - redirect to login instead
     return res.status(200).json({
       success: true,
-      message: "Email verified successfully",
-      token,
-      role: "user",
-      name: user.name
+      message: "Email verified successfully. Please login to continue.",
+      redirectToLogin: true // Frontend should redirect to login page
     });
 
   } catch (err) {

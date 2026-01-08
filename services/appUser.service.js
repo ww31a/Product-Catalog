@@ -11,15 +11,18 @@ class AppUserService {
     return await AppUser.findOne({ email: email.toLowerCase() });
   }
 
-  async verifyCode(code){
-    return await AppUser.findOne({verificationCode: code})
+  async findByEmailAndCode(email, code) {
+    return await AppUser.findOne({
+      email: email.toLowerCase(),
+      verificationCode: code
+    });
   }
 
   // USED: auth controllers (user/seller login)
   async findByEmailWithRole(email, role) {
-    return await AppUser.findOne({ 
-      email: email.toLowerCase(), 
-      roles: role 
+    return await AppUser.findOne({
+      email: email.toLowerCase(),
+      roles: role
     });
   }
 
