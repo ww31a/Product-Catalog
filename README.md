@@ -1,11 +1,12 @@
 # Product Catalog
 
-A full-stack MERN e-commerce application with role-based access control for Users, Sellers, and Admins.
+A full-stack MERN e-commerce application with role-based access control for Users, Sellers, and Admins, featuring real-time chat functionality.
 
 ## Architecture
 
 - **Stack:** MongoDB, Express.js, React, Node.js
 - **Pattern:** MVC (Model-View-Controller)
+- **Real-time Communication:** Socket.IO
 - **Frontend:** React (built and served from `/frontend/dist`)
 
 ## Features
@@ -13,11 +14,15 @@ A full-stack MERN e-commerce application with role-based access control for User
 ### User Panel
 - Browse products with guest cart functionality
 - User authentication with cart merge on login
+- Email verification for account security
+- Real-time chat with sellers
 - Checkout process with Stripe integration
 
 ### Seller Panel
 - Inventory and stock management
 - Order overview and management
+- Real-time chat with buyers
+- Email verification for account security
 - Top-selling products analytics table
 
 ### Admin Panel
@@ -26,11 +31,21 @@ A full-stack MERN e-commerce application with role-based access control for User
 - All products and orders tables
 - System-wide analytics
 
+### Real-time Chat System
+- Direct messaging between users and sellers
+- Typing indicators for enhanced user experience
+- Message read/unread status tracking
+- Room-based chat organization (one room per user-seller pair)
+- Real-time message notifications
+- JWT-based Socket.IO authentication
+- Chat history persistence
+
 ## Prerequisites
 
 - Node.js (v14 or higher)
 - MongoDB
 - npm or yarn
+- SMTP credentials (for email verification)
 
 ## Installation
 
@@ -50,14 +65,27 @@ npm install
 3. Fill in your credentials:
 
 ```env
-# Example structure (see .env.example for full list)
+# Server Configuration
+PORT=5000
+NODE_ENV=production
 MONGODB_URI=your_mongodb_connection_string
+
+# Authentication
 JWT_SECRET=your_jwt_secret
+
+# Cloudinary (Image Storage)
 CLOUDINARY_CLOUD_NAME=your_cloudinary_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+
+# Payment Processing
 STRIPE_SECRET_KEY=your_stripe_key
-NODE_ENV=production
+
+# Email Service (for verification)
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASSWORD=your_email_app_password
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
 ```
 
 ## Running the Application
@@ -70,7 +98,7 @@ NODE_ENV=production npm run dev
 npm start
 ```
 
-The application will serve the built React frontend from `/frontend/dist`.
+The application will serve the built React frontend from `/frontend/dist` and run Socket.IO server for real-time communication.
 
 ## Dependencies
 
@@ -80,6 +108,10 @@ The application will serve the built React frontend from `/frontend/dist`.
 - **bcrypt** - Password hashing
 - **jsonwebtoken** - Authentication tokens
 - **cookie-parser** - Cookie handling
+
+### Real-time Communication
+- **socket.io** - WebSocket library for real-time bidirectional communication
+- **http** - HTTP server wrapper for Socket.IO integration
 
 ### Security
 - **helmet** - HTTP headers security
@@ -91,6 +123,10 @@ The application will serve the built React frontend from `/frontend/dist`.
 - **cloudinary** - Cloud storage for images
 - **multer-storage-cloudinary** - Cloudinary integration
 
+### Email & Verification
+- **nodemailer** - Email sending service
+- Email templates for verification codes
+
 ### Payment & Validation
 - **stripe** - Payment processing
 - **joi** - Request validation
@@ -101,36 +137,100 @@ The application will serve the built React frontend from `/frontend/dist`.
 ```
 Product-Catalog/
 ├── controllers/       # Business logic
+│   └── chat.controller.js
 ├── models/           # MongoDB schemas
+│   └── chatMessage.model.js
 ├── routes/           # API endpoints
+│   └── chat.routes.js
 ├── middlewares/      # Custom middleware
+│   ├── verifyAuth.js
+│   └── authorizeRoles.js
 ├── services/         # Service layer
+│   ├── chatMessage.service.js
+│   └── email.service.js
 ├── utils/            # Helper functions
+│   ├── socketHandler.js
+│   ├── emailTemplate.js
+│   └── cloudinary.config.js
+├── config/           # Configuration files
+│   └── email.config.js
 ├── frontend/dist/    # Built React application
 └── app.js           # Entry point
 ```
 
 ## API Endpoints
 
+### Authentication
 - `/api/users` - User authentication and management
+- `/api/user/auth/verify-email` - Email verification for users
 - `/api/sellers` - Seller operations
-- `/api/admin` - Admin operations
+- `/api/seller/auth/verify-email` - Email verification for sellers
+
+### E-commerce
 - `/api/products` - Product CRUD
 - `/api/cart` - Cart management
 - `/api/orders` - Order processing
+- `/api/inventory` - Inventory management
+
+### Chat System
+- `/api/chat/rooms` - Get user's chat rooms
+- `/api/chat/rooms/seller` - Get seller's chat rooms
+- `/api/chat/room-id` - Compute room ID for user-seller pair
+
+### Admin
+- `/api/superadmin` - Admin operations
+
+## Socket.IO Events
+
+### User Events
+- `join_chat_room` - Join a chat room with a seller
+- `send_message` - Send message to seller
+- `typing_start` / `typing_stop` - Typing indicators
+- `leave_chat_room` - Leave a chat room
+
+### Seller Events
+- `join_seller_chat_room` - Join a chat room with a user
+- `send_seller_message` - Send message to user
+- `seller_typing_start` / `seller_typing_stop` - Typing indicators
+- `leave_seller_chat_room` - Leave a chat room
+
+### Shared Events
+- `new_message` - Receive new messages
+- `new_message_notification` - Receive message notifications
+- `chat_history` - Receive chat history on room join
+- `error` - Socket error handling
+
+## Chat System Architecture
+
+### Room ID Format
+```
+user-{userId}-seller-{sellerId}
+```
+This ensures all products from the same seller go to the same room, centralizing communication.
+
+### Authentication
+Socket.IO connections are authenticated using JWT tokens passed through:
+- `socket.handshake.auth.token`, or
+- `socket.handshake.headers.authorization`
+
+### Message Flow
+1. User/Seller joins room via `join_chat_room` or `join_seller_chat_room`
+2. Messages are saved to MongoDB via `ChatMessageService`
+3. Messages are broadcast to all sockets in the room
+4. Notifications are sent to offline participants
+5. Messages are marked as read when users view the chat
 
 ## Contributors
-## Contributors
 
-**Frontend Development:**
-
+**Frontend Development:**  
 <a href="https://github.com/ww31b">
   <img src="https://github.com/ww31b.png" width="50" height="50" alt="ww31b"/>
-</a>
+</a>  
+**Fazila Sohail**  
+[Frontend Repository](https://github.com/ww31b/Mini-Product-Catalog-Frontend)
 
-**Fazila Sohail**
-
-[https://github.com/ww31b/Product-Catalog-Frontend](https://github.com/ww31b/Mini-Product-Catalog-Frontend)
+**Backend Development:**  
+**Waqas Anwar**
 
 ## Contact
 
