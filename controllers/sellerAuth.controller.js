@@ -23,40 +23,50 @@ export const sellerRegister = async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 3. Test email sending FIRST (before creating seller)
+    // 3. Create AppUser FIRST (so we don't lose data if email fails)
+    let newSeller;
     try {
-      await sendVerificationCode(email, verificationCode);
-    } catch (emailError) {
-      console.error("Email sending failed:", emailError.message);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send verification email. Please try again later."
+      newSeller = await AppUserService.create({
+        name,
+        email,
+        password: hash,
+        roles: ["seller"],
+        verificationCode,
+        isVerified: false
       });
+      console.log("AppUser ID:", newSeller._id);
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: "Seller with this email already exists"
+        });
+      }
+      throw err;
     }
 
-    // 4. Create AppUser with role 'seller' and isVerified: false
-    const newSeller = await AppUserService.create({
-      name,
-      email,
-      password: hash,
-      roles: ["seller"],
-      verificationCode,
-      isVerified: false
-    });
-
-    console.log("AppUser ID:", newSeller._id);
-
-    // 5. Create Seller profile (CRITICAL)
+    // 4. Create Seller profile
     const newSellerProfile = await sellerService.create({
       userId: newSeller._id,
     });
-
     console.log("Seller profile created:", newSellerProfile);
 
-    return res.status(201).json({
-      success: true,
-      message: "Seller registered successfully. Please check your email for verification code."
-    });
+    // 5. Try to send email (don't block registration if email fails)
+    try {
+      await sendVerificationCode(email, verificationCode);
+      return res.status(201).json({
+        success: true,
+        message: "Seller registered successfully. Please check your email for verification code."
+      });
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError.message);
+      // Seller is created, just email failed
+      return res.status(201).json({
+        success: true,
+        message: "Seller registered successfully. Email service temporarily unavailable - please use 'Resend Code' option.",
+        emailFailed: true
+      });
+    }
 
   } catch (err) {
     console.error("sellerRegister error:", err.message);
@@ -136,8 +146,8 @@ export const sellerLogin = async (req, res) => {
 export const verifySellerEmail = async (req, res) => {
   try {
     // Accept both 'code' and 'otp' field names
-    const {  otp, email } = req.body;
-    
+    const { otp, email } = req.body;
+
     if (!otp || !email) {
       return res.status(400).json({
         success: false,
@@ -147,7 +157,7 @@ export const verifySellerEmail = async (req, res) => {
 
     // Find seller by BOTH email and verification code
     const seller = await AppUserService.findByEmailAndCode(email.toLowerCase(), otp);
-    
+
     if (!seller) {
       return res.status(400).json({
         success: false,
@@ -217,7 +227,11 @@ export const resendSellerVerificationCode = async (req, res) => {
     await seller.save();
 
     // Send new code
-    await sendVerificationCode(seller.email, verificationCode);
+    try {
+      await sendVerificationCode(email, verificationCode);
+    } catch (emailError) {
+      return res.status(500).json({success:false, message:"cannot send verification code"});
+    }
 
     return res.status(200).json({
       success: true,

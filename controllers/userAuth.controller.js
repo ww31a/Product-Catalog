@@ -10,7 +10,7 @@ export const userRegister = async (req, res) => {
     const { name, password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    // 1. Check if AppUser already exists
+    // 1. Optional pre-check
     const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({
@@ -23,36 +23,47 @@ export const userRegister = async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 3. Test email sending FIRST (before creating user)
+    // 3. Create AppUser FIRST
+    let newUser;
     try {
-      await sendVerificationCode(email, verificationCode);
-    } catch (emailError) {
-      console.error("Email sending failed:", emailError.message);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send verification email. Please try again later."
+      newUser = await AppUserService.create({
+        name,
+        email,
+        password: hash,
+        roles: ["user"],
+        verificationCode,
+        isVerified: false
       });
+      console.log("AppUser ID:", newUser._id);
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: "User with this email already exists"
+        });
+      }
+      throw err;
     }
 
-    // 4. Create AppUser with isVerified: false (only after email succeeds)
-    const newUser = await AppUserService.create({
-      name,
-      email,
-      password: hash,
-      roles: ["user"],
-      verificationCode,
-      isVerified: false
-    });
+    // 4. Create User profile
+    const newUserProfile = await UserService.create({ userId: newUser._id });
+    console.log("User profile created:", newUserProfile);
 
-    // 5. Create User profile (CRITICAL)
-    await UserService.create({
-      userId: newUser._id
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "User registered successfully. Please check your email for verification code."
-    });
+    // 5. Send verification email (don’t block registration if it fails)
+    try {
+      await sendVerificationCode(email, verificationCode);
+      return res.status(201).json({
+        success: true,
+        message: "User registered successfully. Please check your email for verification code."
+      });
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError.message);
+      return res.status(201).json({
+        success: true,
+        message: "User registered successfully. Email service temporarily unavailable - please use 'Resend Code' option.",
+        emailFailed: true
+      });
+    }
 
   } catch (err) {
     console.error("userRegister error:", err.message);
@@ -62,6 +73,7 @@ export const userRegister = async (req, res) => {
     });
   }
 };
+
 
 export const userLogin = async (req, res) => {
   try {
@@ -136,7 +148,7 @@ export const userLogin = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const { otp, email } = req.body; // ✅ FIXED: Get email from request
-    
+
     if (!otp || !email) {
       return res.status(400).json({
         success: false,
@@ -146,7 +158,7 @@ export const verifyEmail = async (req, res) => {
 
     // ✅ FIXED: Find user by BOTH email and verification code
     const user = await AppUserService.findByEmailAndCode(email.toLowerCase(), otp);
-    
+
     if (!user) {
       return res.status(400).json({
         success: false,
