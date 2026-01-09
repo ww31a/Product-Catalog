@@ -23,19 +23,6 @@ export const getSellerRooms = async (req, res) => {
   }
 };
 
-// Get history for a specific room (both buyer and seller can call)
-export const getRoomHistory = async (req, res) => {
-  try {
-    const { roomId } = req.query;
-    if (!roomId) return res.status(400).json({ success: false, message: "roomId is required" });
-
-    const messages = await ChatMessageService.findByRoomId(roomId, 100);
-    res.json({ success: true, messages: messages.reverse() });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
 // Helper to build room id (for clients that want to compute server-side)
 export const getRoomId = async (req, res) => {
   const { userId, sellerId } = req.query;

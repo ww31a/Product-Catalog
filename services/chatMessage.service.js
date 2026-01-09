@@ -14,10 +14,10 @@ class ChatMessageService {
 
     async markAsRead(roomId, userId) {
         return await ChatMessage.updateMany(
-            { 
-                roomId, 
+            {
+                roomId,
                 senderId: { $ne: userId }, // Messages not sent by this user
-                read: false 
+                read: false
             },
             { read: true }
         );
@@ -32,20 +32,26 @@ class ChatMessageService {
     }
 
     async getUserRooms(userId, role) {
-        const query = role === "user" 
-            ? { userId } 
+        const query = role === "user"
+            ? { userId }
             : { sellerId: userId };
-        
-        return await ChatMessage.aggregate([
+
+        const rooms = await ChatMessage.aggregate([
             { $match: query },
+            { $sort: { createdAt: -1 } },
             {
                 $group: {
                     _id: "$roomId",
-                    lastMessage: { $max: "$createdAt" },
+                    userId: { $first: "$userId" },
+                    sellerId: { $first: "$sellerId" },
+                    lastMessage: { $first: "$message" },
+                    lastMessageTime: { $first: "$createdAt" },
+                    lastSenderId: { $first: "$senderId" },
+                    lastSenderRole: { $first: "$senderRole" },
                     unreadCount: {
                         $sum: {
                             $cond: [
-                                { 
+                                {
                                     $and: [
                                         { $eq: ["$read", false] },
                                         { $ne: ["$senderId", userId] }
@@ -58,8 +64,10 @@ class ChatMessageService {
                     }
                 }
             },
-            { $sort: { lastMessage: -1 } }
+            { $sort: { lastMessageTime: -1 } }
         ]);
+
+        return rooms;
     }
 }
 
