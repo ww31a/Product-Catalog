@@ -1,9 +1,23 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { generateToken } from '../utils/generateToken.js';
 import AppUserService from "../services/appUser.service.js";
 import sellerService from "../services/seller.service.js";
 import { sendVerificationCode } from "../config/email.js";
 
+// ✅ SECURE OTP Generator using crypto
+const generateSecureOTP = () => {
+  // Generate cryptographically secure random 6-digit OTP
+  const otp = crypto.randomInt(100000, 999999).toString();
+  return otp;
+};
+
+// ✅ OTP expiration time (15 minutes)
+const OTP_EXPIRY_MINUTES = 15;
+
+const getOTPExpiryTime = () => {
+  return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+};
 
 export const sellerRegister = async (req, res) => {
   try {
@@ -19,9 +33,10 @@ export const sellerRegister = async (req, res) => {
       });
     }
 
-    // 2. Hash password and generate verification code
+    // 2. Hash password and generate secure verification code
     const hash = await bcrypt.hash(password, 10);
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = generateSecureOTP();
+    const verificationCodeExpiresAt = getOTPExpiryTime();
 
     // 3. Create AppUser FIRST (so we don't lose data if email fails)
     let newSeller;
@@ -32,6 +47,7 @@ export const sellerRegister = async (req, res) => {
         password: hash,
         roles: ["seller"],
         verificationCode,
+        verificationCodeExpiresAt,
         isVerified: false
       });
       console.log("AppUser ID:", newSeller._id);
@@ -56,7 +72,8 @@ export const sellerRegister = async (req, res) => {
       await sendVerificationCode(email, verificationCode);
       return res.status(201).json({
         success: true,
-        message: "Seller registered successfully. Please check your email for verification code."
+        message: "Seller registered successfully. Please check your email for verification code.",
+        expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
       });
     } catch (emailError) {
       console.error("Email sending failed:", emailError.message);
@@ -145,7 +162,6 @@ export const sellerLogin = async (req, res) => {
 
 export const verifySellerEmail = async (req, res) => {
   try {
-    // Accept both 'code' and 'otp' field names
     const { otp, email } = req.body;
 
     if (!otp || !email) {
@@ -165,6 +181,15 @@ export const verifySellerEmail = async (req, res) => {
       });
     }
 
+    // ✅ CHECK OTP EXPIRATION
+    if (seller.verificationCodeExpiresAt && new Date() > seller.verificationCodeExpiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code has expired. Please request a new code.",
+        expired: true
+      });
+    }
+
     // Verify this is a seller, not a user
     if (!seller.roles.includes("seller")) {
       return res.status(403).json({
@@ -173,9 +198,10 @@ export const verifySellerEmail = async (req, res) => {
       });
     }
 
-    // Mark seller as verified
+    // ✅ Mark seller as verified and clear OTP data
     seller.isVerified = true;
     seller.verificationCode = undefined;
+    seller.verificationCodeExpiresAt = undefined;
     await seller.save();
 
     // Don't return token - redirect to login instead
@@ -221,21 +247,28 @@ export const resendSellerVerificationCode = async (req, res) => {
       });
     }
 
-    // Generate new verification code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // ✅ Generate new secure verification code with expiry
+    const verificationCode = generateSecureOTP();
+    const verificationCodeExpiresAt = getOTPExpiryTime();
+    
     seller.verificationCode = verificationCode;
+    seller.verificationCodeExpiresAt = verificationCodeExpiresAt;
     await seller.save();
 
     // Send new code
     try {
       await sendVerificationCode(email, verificationCode);
     } catch (emailError) {
-      return res.status(500).json({success:false, message:"cannot send verification code"});
+      return res.status(500).json({
+        success: false, 
+        message: "Cannot send verification code"
+      });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Verification code sent to your email"
+      message: "Verification code sent to your email",
+      expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
     });
 
   } catch (err) {

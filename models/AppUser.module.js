@@ -31,7 +31,12 @@ const appUserSchema = new mongoose.Schema(
             type: Boolean,
             default: false
         },
-        verificationCode: String
+        verificationCode: {
+            type: String
+        },
+        verificationCodeExpiresAt: {
+            type: Date
+        }
     },
     { timestamps: true, minimize: false }
 );

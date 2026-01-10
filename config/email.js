@@ -1,18 +1,30 @@
-import transporter from "./email.config.js";
+import sgMail from "./email.config.js";
 import { Verification_Email_Template } from "../utils/emailTemplate.js";
 
-export const sendVerificationCode = async (email,verificationCode) => {
+export const sendVerificationCode = async (email, verificationCode) => {
+  try {
+    const msg = {
+      to: email,
+      from: {
+        email: process.env.SENDGRID_FROM_EMAIL,
+        name: process.env.SENDGRID_FROM_NAME,
+      },
+      subject: "Verify Your Email",
+      text: `Your verification code is ${verificationCode}`,
+      html: Verification_Email_Template.replace(
+        "{verificationCode}",
+        verificationCode
+      ),
+    };
 
-    try {
-        const response = await transporter.sendMail({
-            from: '"Team Product Catalog" <waqasanwar1308@gmail.com>', // sender address
-            to: email, // list of recipients
-            subject: "Verify Your Email", // subject line
-            text: "Verify Your Email", // plain text body
-            html: Verification_Email_Template.replace("{verificationCode}",verificationCode), // HTML body
-        });
-        console.log("Message sent: %s", response.messageId);
-    } catch (err) {
-        console.error("Error while sending mail", err);
-    }
-}
+    await sgMail.send(msg);
+    console.log("Verification email sent to:", email);
+
+  } catch (err) {
+    console.error(
+      "SendGrid email error:",
+      err.response?.body || err.message
+    );
+    throw err; // important so controller can handle fallback
+  }
+};

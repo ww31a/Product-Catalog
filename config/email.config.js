@@ -1,15 +1,5 @@
-import nodemailer from "nodemailer"
+import sgMail from "@sendgrid/mail";
 
-// Create a transporter using SMTP
-const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false, // use STARTTLS (upgrade connection to TLS after connecting)
-    auth: {
-        user: process.env.PROCESS_EMAIL,
-        pass: process.env.PROCESS_PASS
-    },
-});
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-
-export default transporter;
+export default sgMail;

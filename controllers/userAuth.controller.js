@@ -1,9 +1,24 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { generateToken } from '../utils/generateToken.js';
 import { mergeGuestCartIntoUserCart } from "../utils/mergeCart.js";
 import AppUserService from "../services/appUser.service.js";
 import UserService from "../services/user.service.js";
 import { sendVerificationCode } from "../config/email.js";
+
+// ✅ SECURE OTP Generator using crypto
+const generateSecureOTP = () => {
+  // Generate cryptographically secure random 6-digit OTP
+  const otp = crypto.randomInt(100000, 999999).toString();
+  return otp;
+};
+
+// ✅ OTP expiration time (15 minutes)
+const OTP_EXPIRY_MINUTES = 15;
+
+const getOTPExpiryTime = () => {
+  return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+};
 
 export const userRegister = async (req, res) => {
   try {
@@ -19,9 +34,10 @@ export const userRegister = async (req, res) => {
       });
     }
 
-    // 2. Hash password and generate verification code
+    // 2. Hash password and generate secure verification code
     const hash = await bcrypt.hash(password, 10);
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = generateSecureOTP();
+    const verificationCodeExpiresAt = getOTPExpiryTime();
 
     // 3. Create AppUser FIRST
     let newUser;
@@ -32,6 +48,7 @@ export const userRegister = async (req, res) => {
         password: hash,
         roles: ["user"],
         verificationCode,
+        verificationCodeExpiresAt,
         isVerified: false
       });
       console.log("AppUser ID:", newUser._id);
@@ -49,12 +66,13 @@ export const userRegister = async (req, res) => {
     const newUserProfile = await UserService.create({ userId: newUser._id });
     console.log("User profile created:", newUserProfile);
 
-    // 5. Send verification email (don’t block registration if it fails)
+    // 5. Send verification email (don't block registration if it fails)
     try {
       await sendVerificationCode(email, verificationCode);
       return res.status(201).json({
         success: true,
-        message: "User registered successfully. Please check your email for verification code."
+        message: "User registered successfully. Please check your email for verification code.",
+        expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
       });
     } catch (emailError) {
       console.error("Email sending failed:", emailError.message);
@@ -147,7 +165,7 @@ export const userLogin = async (req, res) => {
 
 export const verifyEmail = async (req, res) => {
   try {
-    const { otp, email } = req.body; // ✅ FIXED: Get email from request
+    const { otp, email } = req.body;
 
     if (!otp || !email) {
       return res.status(400).json({
@@ -156,7 +174,7 @@ export const verifyEmail = async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Find user by BOTH email and verification code
+    // Find user by BOTH email and verification code
     const user = await AppUserService.findByEmailAndCode(email.toLowerCase(), otp);
 
     if (!user) {
@@ -166,7 +184,16 @@ export const verifyEmail = async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Verify this is a user, not a seller
+    // ✅ CHECK OTP EXPIRATION
+    if (user.verificationCodeExpiresAt && new Date() > user.verificationCodeExpiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code has expired. Please request a new code.",
+        expired: true
+      });
+    }
+
+    // Verify this is a user, not a seller
     if (!user.roles.includes("user")) {
       return res.status(403).json({
         success: false,
@@ -174,16 +201,16 @@ export const verifyEmail = async (req, res) => {
       });
     }
 
-    // Mark user as verified
+    // ✅ Mark user as verified and clear OTP data
     user.isVerified = true;
     user.verificationCode = undefined;
+    user.verificationCodeExpiresAt = undefined;
     await user.save();
 
-    // ✅ FIXED: Don't return token - redirect to login instead
     return res.status(200).json({
       success: true,
       message: "Email verified successfully. Please login to continue.",
-      redirectToLogin: true // Frontend should redirect to login page
+      redirectToLogin: true
     });
 
   } catch (err) {
@@ -195,7 +222,6 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
-// Optional: Resend verification code
 export const resendVerificationCode = async (req, res) => {
   try {
     const email = req.body.email.toLowerCase();
@@ -215,9 +241,12 @@ export const resendVerificationCode = async (req, res) => {
       });
     }
 
-    // Generate new verification code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // ✅ Generate new secure verification code with expiry
+    const verificationCode = generateSecureOTP();
+    const verificationCodeExpiresAt = getOTPExpiryTime();
+    
     user.verificationCode = verificationCode;
+    user.verificationCodeExpiresAt = verificationCodeExpiresAt;
     await user.save();
 
     // Send new code
@@ -225,7 +254,8 @@ export const resendVerificationCode = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Verification code sent to your email"
+      message: "Verification code sent to your email",
+      expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
     });
 
   } catch (err) {
