@@ -18,6 +18,7 @@ import orderRouter from './routes/order.routes.js';
 import inventoryRouter from './routes/inventory.routes.js';
 import superAdminRouter from './routes/superAdmin.routes.js';
 import chatRouter from './routes/chat.routes.js';
+import adminChatRouter from './routes/adminChat.routes.js';
 import { initializeSocketHandlers } from './utils/socketHandler.js';
 
 
@@ -59,6 +60,7 @@ app.use('/api/cart',cartRouter)
 app.use('/api/order',orderRouter)
 app.use('/api/inventory',inventoryRouter)
 app.use('/api/superadmin',superAdminRouter)
+app.use('/api/admin/chat',adminChatRouter)
 app.use('/api/chat',chatRouter)
 
 // Serve React frontend in production

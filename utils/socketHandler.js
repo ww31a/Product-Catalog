@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import ChatMessageService from "../services/chatMessage.service.js";
+import AdminChatService from "../services/adminChat.service.js";
 
 /**
  * Generate room ID for user-seller chat
@@ -17,15 +18,15 @@ export const initializeSocketHandlers = (io) => {
     // Authentication middleware
     io.use((socket, next) => {
         try {
-            const token = socket.handshake.auth?.token || 
-                         socket.handshake.headers?.authorization?.split(" ")[1];
-            
+            const token = socket.handshake.auth?.token ||
+                socket.handshake.headers?.authorization?.split(" ")[1];
+
             if (!token) {
                 return next(new Error("Authentication error: No token provided"));
             }
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            
+
             socket.user = {
                 userId: decoded.id,
                 role: decoded.role,
@@ -42,7 +43,7 @@ export const initializeSocketHandlers = (io) => {
     io.on("connection", async (socket) => {
         const userId = socket.user.userId;
         const userRole = socket.user.role;
-        
+
         console.log(`User connected: ${userId} (${userRole})`);
 
         // Join user's personal room for notifications
@@ -59,14 +60,14 @@ export const initializeSocketHandlers = (io) => {
 
                 const roomId = generateRoomId(userId, sellerId);
                 socket.join(roomId);
-                
+
                 // Mark messages as read when user joins
                 await ChatMessageService.markAsRead(roomId, userId);
-                
+
                 // Send chat history
                 const messages = await ChatMessageService.findByRoomId(roomId);
                 socket.emit("chat_history", { roomId, messages: messages.reverse() });
-                
+
                 console.log(`User ${userId} joined room: ${roomId}`);
             });
 
@@ -83,7 +84,7 @@ export const initializeSocketHandlers = (io) => {
                 }
 
                 const roomId = generateRoomId(userId, sellerId);
-                
+
                 // Save message to database
                 const chatMessage = await ChatMessageService.create({
                     roomId,
@@ -133,6 +134,44 @@ export const initializeSocketHandlers = (io) => {
                     console.log(`User ${userId} left room: ${roomId}`);
                 }
             });
+
+            // ========== USER SUPPORT CHAT HANDLERS ==========
+            socket.on("join_support_room", async ({ conversationId }) => {
+                if (!conversationId) return;
+
+                // Join the support room
+                const roomId = `admin-support-${conversationId}`;
+                socket.join(roomId);
+
+                // Mark messages as read
+                await AdminChatService.markAsRead(conversationId, userId);
+
+                console.log(`User ${userId} joined support room: ${roomId}`);
+            });
+
+            socket.on("send_support_reply", async ({ conversationId, message }) => {
+                if (!conversationId || !message) return;
+
+                try {
+                    const savedMessage = await AdminChatService.sendMessage(
+                        conversationId,
+                        userId,
+                        "User",
+                        message
+                    );
+
+                    const roomId = `admin-support-${conversationId}`;
+                    io.to(roomId).emit("new_support_message", {
+                        conversationId,
+                        message: savedMessage
+                    });
+
+                    // Notify admins (could be room based or broadcast)
+                    // For now, assuming admins join the support room upon selecting conversation
+                } catch (error) {
+                    socket.emit("error", { message: error.message });
+                }
+            });
         }
 
         // ========== SELLER HANDLERS ==========
@@ -143,17 +182,17 @@ export const initializeSocketHandlers = (io) => {
                     socket.emit("error", { message: "targetUserId is required for seller" });
                     return;
                 }
-                
+
                 const roomId = generateRoomId(targetUserId, userId);
                 socket.join(roomId);
-                
+
                 // Mark messages as read when seller joins
                 await ChatMessageService.markAsRead(roomId, userId);
-                
+
                 // Send chat history
                 const messages = await ChatMessageService.findByRoomId(roomId);
                 socket.emit("chat_history", { roomId, messages: messages.reverse() });
-                
+
                 console.log(`Seller ${userId} joined room: ${roomId}`);
             });
 
@@ -170,7 +209,7 @@ export const initializeSocketHandlers = (io) => {
                 }
 
                 const roomId = generateRoomId(targetUserId, userId);
-                
+
                 // Save message to database
                 const chatMessage = await ChatMessageService.create({
                     roomId,
@@ -219,6 +258,104 @@ export const initializeSocketHandlers = (io) => {
                     socket.leave(roomId);
                     console.log(`Seller ${userId} left room: ${roomId}`);
                 }
+            });
+
+            // ========== SELLER SUPPORT CHAT HANDLERS ==========
+            socket.on("join_support_room", async ({ conversationId }) => {
+                if (!conversationId) return;
+
+                // Join the support room
+                const roomId = `admin-support-${conversationId}`;
+                socket.join(roomId);
+
+                // Mark messages as read
+                await AdminChatService.markAsRead(conversationId, userId);
+
+                console.log(`Seller ${userId} joined support room: ${roomId}`);
+            });
+
+            socket.on("send_support_reply", async ({ conversationId, message }) => {
+                if (!conversationId || !message) return;
+
+                try {
+                    const savedMessage = await AdminChatService.sendMessage(
+                        conversationId,
+                        userId,
+                        "Seller",
+                        message
+                    );
+
+                    const roomId = `admin-support-${conversationId}`;
+                    io.to(roomId).emit("new_support_message", {
+                        conversationId,
+                        message: savedMessage
+                    });
+                } catch (error) {
+                    socket.emit("error", { message: error.message });
+                }
+            });
+        }
+
+        // ========== SUPER ADMIN HANDLERS ==========
+        else if (userRole === "superadmin") {
+            // Start or Open Conversation
+            socket.on("admin_start_conversation", async ({ targetId, targetModel }) => {
+                try {
+                    const conversation = await AdminChatService.startConversation(userId, targetId, targetModel);
+
+                    const roomId = `admin-support-${conversation._id}`;
+                    socket.join(roomId);
+
+                    // Fetch history
+                    const history = await AdminChatService.getConversationHistory(conversation._id);
+
+                    socket.emit("conversation_started", {
+                        conversation,
+                        history
+                    });
+
+                } catch (error) {
+                    socket.emit("error", { message: error.message });
+                }
+            });
+
+            // Send Message
+            socket.on("admin_send_message", async ({ conversationId, message }) => {
+                try {
+                    const savedMessage = await AdminChatService.sendMessage(
+                        conversationId,
+                        userId,
+                        "SuperAdmin",
+                        message
+                    );
+
+                    const roomId = `admin-support-${conversationId}`;
+                    io.to(roomId).emit("new_support_message", {
+                        conversationId,
+                        message: savedMessage
+                    });
+
+                } catch (error) {
+                    socket.emit("error", { message: error.message });
+                }
+            });
+
+            // Close Conversation
+            socket.on("admin_close_conversation", async ({ conversationId }) => {
+                try {
+                    const conversation = await AdminChatService.closeConversation(conversationId);
+                    const roomId = `admin-support-${conversationId}`;
+
+                    io.to(roomId).emit("conversation_closed", { conversationId });
+                } catch (error) {
+                    socket.emit("error", { message: error.message });
+                }
+            });
+
+            // Join existing conversation room (for monitoring/rejoining)
+            socket.on("admin_join_conversation", ({ conversationId }) => {
+                const roomId = `admin-support-${conversationId}`;
+                socket.join(roomId);
             });
         }
 
