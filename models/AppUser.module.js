@@ -36,7 +36,13 @@ const appUserSchema = new mongoose.Schema(
         },
         verificationCodeExpiresAt: {
             type: Date
+        },
+        verificationCodeType: {
+            type: String,
+            enum: ["EMAIL_VERIFY", "LOGIN_2FA"],
+            default: "EMAIL_VERIFY"
         }
+
     },
     { timestamps: true, minimize: false }
 );

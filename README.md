@@ -82,10 +82,9 @@ CLOUDINARY_API_SECRET=your_api_secret
 STRIPE_SECRET_KEY=your_stripe_key
 
 # Email Service (for verification)
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASSWORD=your_email_app_password
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
+SENDGRID_API_KEY=your_sendgrid_api
+SENDGRID_FROM_EMAIL=your_google_email
+SENDGRID_FROM_NAME=your_sengrid_email_title
 ```
 
 ## Running the Application
@@ -124,7 +123,7 @@ The application will serve the built React frontend from `/frontend/dist` and ru
 - **multer-storage-cloudinary** - Cloudinary integration
 
 ### Email & Verification
-- **nodemailer** - Email sending service
+- **sendgrid** - Email sending service
 - Email templates for verification codes
 
 ### Payment & Validation

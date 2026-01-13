@@ -5,14 +5,11 @@ import AppUserService from "../services/appUser.service.js";
 import sellerService from "../services/seller.service.js";
 import { sendVerificationCode } from "../config/email.js";
 
-// ✅ SECURE OTP Generator using crypto
 const generateSecureOTP = () => {
-  // Generate cryptographically secure random 6-digit OTP
   const otp = crypto.randomInt(100000, 999999).toString();
   return otp;
 };
 
-// ✅ OTP expiration time (15 minutes)
 const OTP_EXPIRY_MINUTES = 15;
 
 const getOTPExpiryTime = () => {
@@ -24,7 +21,6 @@ export const sellerRegister = async (req, res) => {
     const { name, password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    // 1. Check if seller already exists
     const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({
@@ -33,249 +29,209 @@ export const sellerRegister = async (req, res) => {
       });
     }
 
-    // 2. Hash password and generate secure verification code
     const hash = await bcrypt.hash(password, 10);
     const verificationCode = generateSecureOTP();
-    const verificationCodeExpiresAt = getOTPExpiryTime();
 
-    // 3. Create AppUser FIRST (so we don't lose data if email fails)
-    let newSeller;
-    try {
-      newSeller = await AppUserService.create({
-        name,
-        email,
-        password: hash,
-        roles: ["seller"],
-        verificationCode,
-        verificationCodeExpiresAt,
-        isVerified: false
-      });
-      console.log("AppUser ID:", newSeller._id);
-    } catch (err) {
-      if (err.code === 11000) {
-        return res.status(400).json({
-          success: false,
-          message: "Seller with this email already exists"
-        });
-      }
-      throw err;
-    }
-
-    // 4. Create Seller profile
-    const newSellerProfile = await sellerService.create({
-      userId: newSeller._id,
+    const seller = await AppUserService.create({
+      name,
+      email,
+      password: hash,
+      roles: ["seller"],
+      isVerified: false,
+      verificationCode,
+      verificationCodeType: "EMAIL_VERIFY",
+      verificationCodeExpiresAt: getOTPExpiryTime()
     });
-    console.log("Seller profile created:", newSellerProfile);
 
-    // 5. Try to send email (don't block registration if email fails)
+    await sellerService.create({ userId: seller._id });
+
     try {
       await sendVerificationCode(email, verificationCode);
+    } catch {
       return res.status(201).json({
         success: true,
-        message: "Seller registered successfully. Please check your email for verification code.",
-        expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
-      });
-    } catch (emailError) {
-      console.error("Email sending failed:", emailError.message);
-      // Seller is created, just email failed
-      return res.status(201).json({
-        success: true,
-        message: "Seller registered successfully. Email service temporarily unavailable - please use 'Resend Code' option.",
+        message: "Registered. Email failed — use resend option.",
         emailFailed: true
       });
     }
 
-  } catch (err) {
-    console.error("sellerRegister error:", err.message);
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
-};
-
-export const sellerLogin = async (req, res) => {
-  try {
-    const { password } = req.body;
-    const email = req.body.email.toLowerCase();
-
-    // 1. Find AppUser with seller role
-    const seller = await AppUserService.findByEmailWithRole(email, "seller");
-    if (!seller) {
-      return res.status(404).json({
-        success: false,
-        message: "Seller not found"
-      });
-    }
-
-    // 2. Validate password
-    const match = await bcrypt.compare(password, seller.password);
-    if (!match) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid credentials"
-      });
-    }
-
-    // 3. Check if email is verified
-    if (!seller.isVerified) {
-      return res.status(403).json({
-        success: false,
-        message: "Please verify your email before logging in",
-        requiresVerification: true
-      });
-    }
-
-    // 4. Ensure Seller profile exists and is linked correctly
-    const sellerProfile = await sellerService.findByUserId(seller._id);
-    if (!sellerProfile || sellerProfile.userId.toString() !== seller._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "Seller profile not initialized or mislinked"
-      });
-    }
-
-    // 5. Generate JWT
-    const token = generateToken({
-      id: seller._id,
-      role: "seller",
-      roles: seller.roles
-    });
-
-    // 6. Respond
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: "Login successful",
-      token,
-      role: "seller",
-      name: seller.name
+      message: "Registered successfully. Check your email.",
+      expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
     });
 
   } catch (err) {
-    console.error("sellerLogin error:", err.message);
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 export const verifySellerEmail = async (req, res) => {
   try {
-    const { otp, email } = req.body;
+    const { email, otp } = req.body;
 
-    if (!otp || !email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and verification code are required"
-      });
-    }
-
-    // Find seller by BOTH email and verification code
-    const seller = await AppUserService.findByEmailAndCode(email.toLowerCase(), otp);
-
-    if (!seller) {
+    const seller = await AppUserService.findByEmail(email.toLowerCase());
+    if (
+      !seller ||
+      seller.verificationCodeType !== "EMAIL_VERIFY" ||
+      seller.verificationCode !== otp
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid or expired verification code"
       });
     }
 
-    // ✅ CHECK OTP EXPIRATION
-    if (seller.verificationCodeExpiresAt && new Date() > seller.verificationCodeExpiresAt) {
+    if (new Date() > seller.verificationCodeExpiresAt) {
       return res.status(400).json({
         success: false,
-        message: "Verification code has expired. Please request a new code.",
+        message: "Verification code expired",
         expired: true
       });
     }
 
-    // Verify this is a seller, not a user
-    if (!seller.roles.includes("seller")) {
-      return res.status(403).json({
-        success: false,
-        message: "Invalid seller account"
-      });
-    }
-
-    // ✅ Mark seller as verified and clear OTP data
     seller.isVerified = true;
     seller.verificationCode = undefined;
+    seller.verificationCodeType = undefined;
     seller.verificationCodeExpiresAt = undefined;
     await seller.save();
 
-    // Don't return token - redirect to login instead
     return res.status(200).json({
       success: true,
-      message: "Email verified successfully. Please login to continue.",
+      message: "Email verified. Please login.",
       redirectToLogin: true
     });
 
   } catch (err) {
-    console.error("verifySellerEmail error:", err.message);
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+export const sellerLogin = async (req, res) => {
+  try {
+    const { password } = req.body;
+    const email = req.body.email.toLowerCase();
+
+    const seller = await AppUserService.findByEmailWithRole(email, "seller");
+    if (!seller) {
+      return res.status(404).json({ success: false, message: "Seller not found" });
+    }
+
+    const match = await bcrypt.compare(password, seller.password);
+    if (!match) {
+      return res.status(400).json({ success: false, message: "Invalid credentials" });
+    }
+
+    if (!seller.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Verify email before login",
+        requiresVerification: true
+      });
+    }
+
+    const otp = generateSecureOTP();
+    seller.verificationCode = otp;
+    seller.verificationCodeType = "LOGIN_2FA";
+    seller.verificationCodeExpiresAt = getOTPExpiryTime();
+    await seller.save();
+
+    await sendVerificationCode(email, otp);
+
+    return res.status(200).json({
+      success: true,
+      requires2FA: true,
+      message: "Verification code sent to email",
+      expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const verifySellerLoginOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const seller = await AppUserService.findByEmail(email.toLowerCase());
+
+    if (
+      !seller ||
+      seller.verificationCodeType !== "LOGIN_2FA" ||
+      seller.verificationCode !== otp
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification code"
+      });
+    }
+
+    if (new Date() > seller.verificationCodeExpiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code expired",
+        expired: true
+      });
+    }
+
+    seller.verificationCode = undefined;
+    seller.verificationCodeType = undefined;
+    seller.verificationCodeExpiresAt = undefined;
+    await seller.save();
+
+    const token = generateToken({
+      id: seller._id,
+      role: "seller",
+      roles: seller.roles
+    });
+
+    return res.status(200).json({
+      success: true,
+      token,
+      role: "seller",
+      name: seller.name
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
 
 export const resendSellerVerificationCode = async (req, res) => {
   try {
     const email = req.body.email.toLowerCase();
 
     const seller = await AppUserService.findByEmail(email);
-    if (!seller) {
-      return res.status(404).json({
-        success: false,
-        message: "Seller not found"
-      });
+    if (!seller || !seller.roles.includes("seller")) {
+      return res.status(404).json({ success: false, message: "Seller not found" });
     }
 
-    // Verify this is a seller account
-    if (!seller.roles.includes("seller")) {
-      return res.status(403).json({
-        success: false,
-        message: "Invalid seller account"
-      });
-    }
-
-    if (seller.isVerified) {
+    if (seller.isVerified && seller.verificationCodeType === "EMAIL_VERIFY") {
       return res.status(400).json({
         success: false,
         message: "Email already verified"
       });
     }
 
-    // ✅ Generate new secure verification code with expiry
-    const verificationCode = generateSecureOTP();
-    const verificationCodeExpiresAt = getOTPExpiryTime();
-    
-    seller.verificationCode = verificationCode;
-    seller.verificationCodeExpiresAt = verificationCodeExpiresAt;
+    const otp = generateSecureOTP();
+    seller.verificationCode = otp;
+    seller.verificationCodeExpiresAt = getOTPExpiryTime();
     await seller.save();
 
-    // Send new code
-    try {
-      await sendVerificationCode(email, verificationCode);
-    } catch (emailError) {
-      return res.status(500).json({
-        success: false, 
-        message: "Cannot send verification code"
-      });
-    }
+    await sendVerificationCode(email, otp);
 
     return res.status(200).json({
       success: true,
-      message: "Verification code sent to your email",
+      message: "Verification code sent",
       expiresIn: `${OTP_EXPIRY_MINUTES} minutes`
     });
 
   } catch (err) {
-    console.error("resendSellerVerificationCode error:", err.message);
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
