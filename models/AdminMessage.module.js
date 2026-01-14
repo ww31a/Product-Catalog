@@ -20,8 +20,16 @@ const adminMessageSchema = new mongoose.Schema(
         },
         message: {
             type: String,
-            required: true,
+            required: function () {
+                return !this.image;
+            },
             trim: true
+        },
+        image: {
+            type: String,
+            required: function () {
+                return !this.message;
+            }
         },
         read: {
             type: Boolean,

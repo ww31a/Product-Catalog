@@ -32,5 +32,22 @@ export const getRoomId = async (req, res) => {
   return res.json({ success: true, roomId: generateRoomId(userId, sellerId) });
 };
 
+// Upload image for chat
+export const uploadChatImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No image file provided" });
+    }
+
+    res.json({
+      success: true,
+      imageUrl: req.file.path,
+      publicId: req.file.filename
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 

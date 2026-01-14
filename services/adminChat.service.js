@@ -43,7 +43,7 @@ class AdminChatService {
      * Send a message in a conversation.
      * Throws error if conversation is closed.
      */
-    async sendMessage(conversationId, senderId, senderModel, messageText) {
+    async sendMessage(conversationId, senderId, senderModel, messageText, imageUrl = null) {
         const conversation = await AdminConversation.findById(conversationId);
 
         if (!conversation) {
@@ -54,13 +54,17 @@ class AdminChatService {
             throw new Error("Conversation is closed");
         }
 
-        const message = await AdminMessage.create({
+        const messageData = {
             conversationId,
             senderId,
             senderModel,
-            message: messageText,
             read: false
-        });
+        };
+
+        if (messageText) messageData.message = messageText.trim();
+        if (imageUrl) messageData.image = imageUrl;
+
+        const message = await AdminMessage.create(messageData);
 
         return message;
     }

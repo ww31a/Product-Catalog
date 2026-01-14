@@ -2,18 +2,12 @@ import jwt from "jsonwebtoken";
 import ChatMessageService from "../services/chatMessage.service.js";
 import AdminChatService from "../services/adminChat.service.js";
 
-/**
- * Generate room ID for user-seller chat
- * Format: user-{userId}-seller-{sellerId}
- * This ensures all products from the same seller go to the same room
- */
+
 export const generateRoomId = (userId, sellerId) => {
     return `user-${userId}-seller-${sellerId}`;
 };
 
-/**
- * Initialize Socket.IO handlers for chat functionality
- */
+
 export const initializeSocketHandlers = (io) => {
     // Authentication middleware
     io.use((socket, next) => {
@@ -72,14 +66,14 @@ export const initializeSocketHandlers = (io) => {
             });
 
             // Handle sending messages (user -> seller)
-            socket.on("send_message", async ({ sellerId, message }) => {
+            socket.on("send_message", async ({ sellerId, message, imageUrl }) => {
                 if (!sellerId) {
                     socket.emit("error", { message: "sellerId is required" });
                     return;
                 }
 
-                if (!message || !message.trim()) {
-                    socket.emit("error", { message: "Message cannot be empty" });
+                if ((!message || !message.trim()) && !imageUrl) {
+                    socket.emit("error", { message: "Message or image is required" });
                     return;
                 }
 
@@ -92,7 +86,8 @@ export const initializeSocketHandlers = (io) => {
                     sellerId,
                     senderId: userId,
                     senderRole: "user",
-                    message: message.trim(),
+                    message: message ? message.trim() : undefined,
+                    image: imageUrl,
                     read: false
                 });
 
@@ -149,15 +144,16 @@ export const initializeSocketHandlers = (io) => {
                 console.log(`User ${userId} joined support room: ${roomId}`);
             });
 
-            socket.on("send_support_reply", async ({ conversationId, message }) => {
-                if (!conversationId || !message) return;
+            socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
+                if (!conversationId || (!message && !imageUrl)) return;
 
                 try {
                     const savedMessage = await AdminChatService.sendMessage(
                         conversationId,
                         userId,
                         "User",
-                        message
+                        message,
+                        imageUrl
                     );
 
                     const roomId = `admin-support-${conversationId}`;
@@ -197,14 +193,14 @@ export const initializeSocketHandlers = (io) => {
             });
 
             // Handle sending messages (seller -> user)
-            socket.on("send_seller_message", async ({ targetUserId, message }) => {
+            socket.on("send_seller_message", async ({ targetUserId, message, imageUrl }) => {
                 if (!targetUserId) {
                     socket.emit("error", { message: "targetUserId is required" });
                     return;
                 }
 
-                if (!message || !message.trim()) {
-                    socket.emit("error", { message: "Message cannot be empty" });
+                if ((!message || !message.trim()) && !imageUrl) {
+                    socket.emit("error", { message: "Message or image is required" });
                     return;
                 }
 
@@ -217,7 +213,8 @@ export const initializeSocketHandlers = (io) => {
                     sellerId: userId,
                     senderId: userId,
                     senderRole: "seller",
-                    message: message.trim(),
+                    message: message ? message.trim() : undefined,
+                    image: imageUrl,
                     read: false
                 });
 
@@ -274,15 +271,16 @@ export const initializeSocketHandlers = (io) => {
                 console.log(`Seller ${userId} joined support room: ${roomId}`);
             });
 
-            socket.on("send_support_reply", async ({ conversationId, message }) => {
-                if (!conversationId || !message) return;
+            socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
+                if (!conversationId || (!message && !imageUrl)) return;
 
                 try {
                     const savedMessage = await AdminChatService.sendMessage(
                         conversationId,
                         userId,
                         "Seller",
-                        message
+                        message,
+                        imageUrl
                     );
 
                     const roomId = `admin-support-${conversationId}`;
@@ -320,13 +318,14 @@ export const initializeSocketHandlers = (io) => {
             });
 
             // Send Message
-            socket.on("admin_send_message", async ({ conversationId, message }) => {
+            socket.on("admin_send_message", async ({ conversationId, message, imageUrl }) => {
                 try {
                     const savedMessage = await AdminChatService.sendMessage(
                         conversationId,
                         userId,
                         "SuperAdmin",
-                        message
+                        message,
+                        imageUrl
                     );
 
                     const roomId = `admin-support-${conversationId}`;
