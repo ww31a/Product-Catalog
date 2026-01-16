@@ -1,12 +1,74 @@
 import jwt from "jsonwebtoken";
 import ChatMessageService from "../services/chatMessage.service.js";
 import AdminChatService from "../services/adminChat.service.js";
-
+import AdminConversation from "../models/AdminConversation.module.js";
 
 export const generateRoomId = (userId, sellerId) => {
     return `user-${userId}-seller-${sellerId}`;
 };
 
+// Shared support chat handlers for users and sellers
+const setupSupportHandlers = (socket, io, userId) => {
+    socket.on("join_support_room", async ({ conversationId }) => {
+        if (!conversationId) return;
+
+        const roomId = `admin-support-${conversationId}`;
+        socket.join(roomId);
+
+        await AdminChatService.markAsRead(conversationId, userId);
+
+        // Send chat history
+        const messages = await AdminChatService.getConversationHistory(conversationId);
+        socket.emit("chat_history", { 
+            roomId, 
+            messages: messages.reverse() 
+        });
+
+        console.log(`User ${userId} joined support room: ${roomId}`);
+    });
+
+    socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
+        if (!conversationId || (!message && !imageUrl)) return;
+
+        try {
+            const senderModel = socket.user.role === "user" ? "User" : "Seller";
+            const savedMessage = await AdminChatService.sendMessage(
+                conversationId,
+                userId,
+                senderModel,
+                message,
+                imageUrl
+            );
+
+            const roomId = `admin-support-${conversationId}`;
+            io.to(roomId).emit("new_support_message", {
+                conversationId,
+                message: savedMessage
+            });
+
+            // Notify admin
+            const conversation = await AdminConversation.findById(conversationId);
+            if (conversation?.adminId) {
+                io.to(`user-${conversation.adminId}`).emit("new_message_notification", {
+                    roomId,
+                    conversationId,
+                    message: savedMessage,
+                    isAdminChat: true
+                });
+            }
+        } catch (error) {
+            socket.emit("error", { message: error.message });
+        }
+    });
+
+    socket.on("leave_support_room", ({ conversationId }) => {
+        if (conversationId) {
+            const roomId = `admin-support-${conversationId}`;
+            socket.leave(roomId);
+            console.log(`User ${userId} left support room: ${roomId}`);
+        }
+    });
+};
 
 export const initializeSocketHandlers = (io) => {
     // Authentication middleware
@@ -45,7 +107,6 @@ export const initializeSocketHandlers = (io) => {
 
         // ========== USER HANDLERS ==========
         if (userRole === "user") {
-            // Handle joining a chat room with a seller
             socket.on("join_chat_room", async ({ sellerId }) => {
                 if (!sellerId) {
                     socket.emit("error", { message: "sellerId is required" });
@@ -55,17 +116,14 @@ export const initializeSocketHandlers = (io) => {
                 const roomId = generateRoomId(userId, sellerId);
                 socket.join(roomId);
 
-                // Mark messages as read when user joins
                 await ChatMessageService.markAsRead(roomId, userId);
 
-                // Send chat history
                 const messages = await ChatMessageService.findByRoomId(roomId);
                 socket.emit("chat_history", { roomId, messages: messages.reverse() });
 
                 console.log(`User ${userId} joined room: ${roomId}`);
             });
 
-            // Handle sending messages (user -> seller)
             socket.on("send_message", async ({ sellerId, message, imageUrl }) => {
                 if (!sellerId) {
                     socket.emit("error", { message: "sellerId is required" });
@@ -79,7 +137,6 @@ export const initializeSocketHandlers = (io) => {
 
                 const roomId = generateRoomId(userId, sellerId);
 
-                // Save message to database
                 const chatMessage = await ChatMessageService.create({
                     roomId,
                     userId,
@@ -91,22 +148,19 @@ export const initializeSocketHandlers = (io) => {
                     read: false
                 });
 
-                // Emit to all sockets in the room (including sender)
+                // Emit the message object directly (not nested)
                 io.to(roomId).emit("new_message", {
                     roomId,
-                    message: chatMessage,
-                    senderId: userId,
-                    senderRole: "user"
+                    message: chatMessage
                 });
 
-                // Notify seller if they're not in the room
+                // Notify seller
                 io.to(`user-${sellerId}`).emit("new_message_notification", {
                     roomId,
                     message: chatMessage
                 });
             });
 
-            // Handle typing indicators
             socket.on("typing_start", ({ sellerId }) => {
                 if (sellerId) {
                     const roomId = generateRoomId(userId, sellerId);
@@ -121,7 +175,6 @@ export const initializeSocketHandlers = (io) => {
                 }
             });
 
-            // Handle leaving a room
             socket.on("leave_chat_room", ({ sellerId }) => {
                 if (sellerId) {
                     const roomId = generateRoomId(userId, sellerId);
@@ -130,49 +183,11 @@ export const initializeSocketHandlers = (io) => {
                 }
             });
 
-            // ========== USER SUPPORT CHAT HANDLERS ==========
-            socket.on("join_support_room", async ({ conversationId }) => {
-                if (!conversationId) return;
-
-                // Join the support room
-                const roomId = `admin-support-${conversationId}`;
-                socket.join(roomId);
-
-                // Mark messages as read
-                await AdminChatService.markAsRead(conversationId, userId);
-
-                console.log(`User ${userId} joined support room: ${roomId}`);
-            });
-
-            socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
-                if (!conversationId || (!message && !imageUrl)) return;
-
-                try {
-                    const savedMessage = await AdminChatService.sendMessage(
-                        conversationId,
-                        userId,
-                        "User",
-                        message,
-                        imageUrl
-                    );
-
-                    const roomId = `admin-support-${conversationId}`;
-                    io.to(roomId).emit("new_support_message", {
-                        conversationId,
-                        message: savedMessage
-                    });
-
-                    // Notify admins (could be room based or broadcast)
-                    // For now, assuming admins join the support room upon selecting conversation
-                } catch (error) {
-                    socket.emit("error", { message: error.message });
-                }
-            });
+            setupSupportHandlers(socket, io, userId);
         }
 
         // ========== SELLER HANDLERS ==========
         else if (userRole === "seller") {
-            // Handle joining a chat room with a user
             socket.on("join_seller_chat_room", async ({ targetUserId }) => {
                 if (!targetUserId) {
                     socket.emit("error", { message: "targetUserId is required for seller" });
@@ -182,17 +197,14 @@ export const initializeSocketHandlers = (io) => {
                 const roomId = generateRoomId(targetUserId, userId);
                 socket.join(roomId);
 
-                // Mark messages as read when seller joins
                 await ChatMessageService.markAsRead(roomId, userId);
 
-                // Send chat history
                 const messages = await ChatMessageService.findByRoomId(roomId);
                 socket.emit("chat_history", { roomId, messages: messages.reverse() });
 
                 console.log(`Seller ${userId} joined room: ${roomId}`);
             });
 
-            // Handle sending messages (seller -> user)
             socket.on("send_seller_message", async ({ targetUserId, message, imageUrl }) => {
                 if (!targetUserId) {
                     socket.emit("error", { message: "targetUserId is required" });
@@ -206,7 +218,6 @@ export const initializeSocketHandlers = (io) => {
 
                 const roomId = generateRoomId(targetUserId, userId);
 
-                // Save message to database
                 const chatMessage = await ChatMessageService.create({
                     roomId,
                     userId: targetUserId,
@@ -218,22 +229,17 @@ export const initializeSocketHandlers = (io) => {
                     read: false
                 });
 
-                // Emit to all sockets in the room
                 io.to(roomId).emit("new_message", {
                     roomId,
-                    message: chatMessage,
-                    senderId: userId,
-                    senderRole: "seller"
+                    message: chatMessage
                 });
 
-                // Notify user if they're not in the room
                 io.to(`user-${targetUserId}`).emit("new_message_notification", {
                     roomId,
                     message: chatMessage
                 });
             });
 
-            // Handle typing indicators for seller
             socket.on("seller_typing_start", ({ targetUserId }) => {
                 if (targetUserId) {
                     const roomId = generateRoomId(targetUserId, userId);
@@ -248,7 +254,6 @@ export const initializeSocketHandlers = (io) => {
                 }
             });
 
-            // Handle leaving a room
             socket.on("leave_seller_chat_room", ({ targetUserId }) => {
                 if (targetUserId) {
                     const roomId = generateRoomId(targetUserId, userId);
@@ -257,68 +262,34 @@ export const initializeSocketHandlers = (io) => {
                 }
             });
 
-            // ========== SELLER SUPPORT CHAT HANDLERS ==========
-            socket.on("join_support_room", async ({ conversationId }) => {
-                if (!conversationId) return;
-
-                // Join the support room
-                const roomId = `admin-support-${conversationId}`;
-                socket.join(roomId);
-
-                // Mark messages as read
-                await AdminChatService.markAsRead(conversationId, userId);
-
-                console.log(`Seller ${userId} joined support room: ${roomId}`);
-            });
-
-            socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
-                if (!conversationId || (!message && !imageUrl)) return;
-
-                try {
-                    const savedMessage = await AdminChatService.sendMessage(
-                        conversationId,
-                        userId,
-                        "Seller",
-                        message,
-                        imageUrl
-                    );
-
-                    const roomId = `admin-support-${conversationId}`;
-                    io.to(roomId).emit("new_support_message", {
-                        conversationId,
-                        message: savedMessage
-                    });
-                } catch (error) {
-                    socket.emit("error", { message: error.message });
-                }
-            });
+            setupSupportHandlers(socket, io, userId);
         }
 
         // ========== SUPER ADMIN HANDLERS ==========
         else if (userRole === "superadmin") {
-            // Start or Open Conversation
-            socket.on("admin_start_conversation", async ({ targetId, targetModel }) => {
-                try {
-                    const conversation = await AdminChatService.startConversation(userId, targetId, targetModel);
+            socket.on("admin_join_conversation", async ({ conversationId }) => {
+                if (!conversationId) return;
 
-                    const roomId = `admin-support-${conversation._id}`;
-                    socket.join(roomId);
+                const roomId = `admin-support-${conversationId}`;
+                socket.join(roomId);
 
-                    // Fetch history
-                    const history = await AdminChatService.getConversationHistory(conversation._id);
+                await AdminChatService.markAsRead(conversationId, userId);
 
-                    socket.emit("conversation_started", {
-                        conversation,
-                        history
-                    });
+                const history = await AdminChatService.getConversationHistory(conversationId);
+                socket.emit("chat_history", { 
+                    conversationId, 
+                    messages: history.reverse() 
+                });
 
-                } catch (error) {
-                    socket.emit("error", { message: error.message });
-                }
+                console.log(`Admin ${userId} joined conversation room: ${roomId}`);
             });
 
-            // Send Message
             socket.on("admin_send_message", async ({ conversationId, message, imageUrl }) => {
+                if (!conversationId || (!message && !imageUrl)) {
+                    socket.emit("error", { message: "conversationId and message/image are required" });
+                    return;
+                }
+
                 try {
                     const savedMessage = await AdminChatService.sendMessage(
                         conversationId,
@@ -329,36 +300,50 @@ export const initializeSocketHandlers = (io) => {
                     );
 
                     const roomId = `admin-support-${conversationId}`;
+                    
                     io.to(roomId).emit("new_support_message", {
                         conversationId,
                         message: savedMessage
                     });
 
+                    // Notify participant
+                    const conv = await AdminConversation.findById(conversationId);
+                    if (conv?.participantId) {
+                        io.to(`user-${conv.participantId.toString()}`).emit("new_message_notification", {
+                            roomId,
+                            conversationId,
+                            message: savedMessage,
+                            isAdminChat: true
+                        });
+                    }
                 } catch (error) {
                     socket.emit("error", { message: error.message });
                 }
             });
 
-            // Close Conversation
-            socket.on("admin_close_conversation", async ({ conversationId }) => {
-                try {
-                    const conversation = await AdminChatService.closeConversation(conversationId);
+            socket.on("admin_typing_start", ({ conversationId }) => {
+                if (conversationId) {
                     const roomId = `admin-support-${conversationId}`;
-
-                    io.to(roomId).emit("conversation_closed", { conversationId });
-                } catch (error) {
-                    socket.emit("error", { message: error.message });
+                    socket.to(roomId).emit("admin_typing", { isTyping: true });
                 }
             });
 
-            // Join existing conversation room (for monitoring/rejoining)
-            socket.on("admin_join_conversation", ({ conversationId }) => {
-                const roomId = `admin-support-${conversationId}`;
-                socket.join(roomId);
+            socket.on("admin_typing_stop", ({ conversationId }) => {
+                if (conversationId) {
+                    const roomId = `admin-support-${conversationId}`;
+                    socket.to(roomId).emit("admin_typing", { isTyping: false });
+                }
+            });
+
+            socket.on("admin_leave_conversation", ({ conversationId }) => {
+                if (conversationId) {
+                    const roomId = `admin-support-${conversationId}`;
+                    socket.leave(roomId);
+                    console.log(`Admin ${userId} left conversation room: ${roomId}`);
+                }
             });
         }
 
-        // Handle disconnection
         socket.on("disconnect", () => {
             console.log(`User disconnected: ${userId} (${userRole})`);
         });

@@ -5,9 +5,16 @@ class ChatMessageService {
         return await ChatMessage.create(messageData);
     }
 
-    async findByRoomId(roomId, limit = 50) {
-        return await ChatMessage.find({ roomId })
-            .sort({ createdAt: -1 })
+    async findByRoomId(roomId, limit = 50, before = null) {
+        const query = { roomId };
+        
+        if (before) {
+            query.createdAt = { $lt: before };
+        }
+        
+        // Return in ascending order (oldest first) for display
+        return await ChatMessage.find(query)
+            .sort({ createdAt: 1 })
             .limit(limit)
             .lean();
     }
@@ -48,6 +55,7 @@ class ChatMessageService {
                     lastMessageTime: { $first: "$createdAt" },
                     lastSenderId: { $first: "$senderId" },
                     lastSenderRole: { $first: "$senderRole" },
+                    lastImage: { $first: "$image" },
                     unreadCount: {
                         $sum: {
                             $cond: [
@@ -69,7 +77,30 @@ class ChatMessageService {
 
         return rooms;
     }
+
+    async deleteMessage(messageId, userId) {
+        // Only allow deleting own messages
+        return await ChatMessage.findOneAndDelete({
+            _id: messageId,
+            senderId: userId
+        });
+    }
+
+    async updateMessage(messageId, userId, newMessage) {
+        // Only allow updating own messages
+        return await ChatMessage.findOneAndUpdate(
+            {
+                _id: messageId,
+                senderId: userId
+            },
+            { 
+                message: newMessage.trim(),
+                edited: true,
+                editedAt: new Date()
+            },
+            { new: true }
+        );
+    }
 }
 
 export default new ChatMessageService();
-

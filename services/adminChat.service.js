@@ -28,14 +28,22 @@ class AdminChatService {
 
     /**
      * Close a conversation. 
-     * Only the admin who started it or any admin can close it (logic allows any admin currently).
+     * Only the admin who started it or any admin can close it.
      */
     async closeConversation(conversationId) {
         const conversation = await AdminConversation.findByIdAndUpdate(
             conversationId,
-            { status: "closed" },
+            { 
+                status: "closed",
+                closedAt: new Date()
+            },
             { new: true }
         );
+        
+        if (!conversation) {
+            throw new Error("Conversation not found");
+        }
+        
         return conversation;
     }
 
@@ -66,14 +74,29 @@ class AdminChatService {
 
         const message = await AdminMessage.create(messageData);
 
+        // Update conversation's updatedAt timestamp
+        await AdminConversation.findByIdAndUpdate(conversationId, {
+            updatedAt: new Date()
+        });
+
         return message;
     }
 
     /**
-     * Get chat history for a conversation
+     * Get chat history for a conversation with pagination
      */
-    async getConversationHistory(conversationId) {
-        return await AdminMessage.find({ conversationId }).sort({ createdAt: 1 });
+    async getConversationHistory(conversationId, limit = 50, before = null) {
+        const query = { conversationId };
+        
+        if (before) {
+            query.createdAt = { $lt: before };
+        }
+        
+        // Return in ascending order (oldest first) for display
+        return await AdminMessage.find(query)
+            .sort({ createdAt: 1 })
+            .limit(limit)
+            .lean();
     }
 
     /**
@@ -89,6 +112,65 @@ class AdminChatService {
             },
             { read: true }
         );
+    }
+
+    /**
+     * Get unread count for a conversation
+     */
+    async getUnreadCount(conversationId, userId) {
+        return await AdminMessage.countDocuments({
+            conversationId,
+            senderId: { $ne: userId },
+            read: false
+        });
+    }
+
+    /**
+     * Delete a message (only sender can delete)
+     */
+    async deleteMessage(messageId, senderId) {
+        return await AdminMessage.findOneAndDelete({
+            _id: messageId,
+            senderId
+        });
+    }
+
+    /**
+     * Update/edit a message (only sender can edit)
+     */
+    async updateMessage(messageId, senderId, newMessage) {
+        return await AdminMessage.findOneAndUpdate(
+            {
+                _id: messageId,
+                senderId
+            },
+            {
+                message: newMessage.trim(),
+                edited: true,
+                editedAt: new Date()
+            },
+            { new: true }
+        );
+    }
+
+    /**
+     * Get all conversations (for admin dashboard)
+     */
+    async getAllConversations(filters = {}) {
+        const query = {};
+        
+        if (filters.status) {
+            query.status = filters.status;
+        }
+        
+        if (filters.participantModel) {
+            query.participantModel = filters.participantModel;
+        }
+
+        return await AdminConversation.find(query)
+            .populate("participantId")
+            .populate("adminId", "name email")
+            .sort({ updatedAt: -1 });
     }
 }
 
