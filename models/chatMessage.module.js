@@ -16,7 +16,7 @@ const chatMessageSchema = new mongoose.Schema({
     },
     senderId: {
         type: String,
-        required: true // The ID of who sent the message (could be userId or sellerId)
+        required: true 
     },
     senderRole: {
         type: String,

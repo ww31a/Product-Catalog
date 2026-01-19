@@ -1,6 +1,5 @@
 import AdminChatService from "../services/adminChat.service.js";
 
-// Get all conversations for admin dashboard
 export const getAdminConversations = async (req, res) => {
   try {
     const conversations = await AdminChatService.getAllConversationsWithDetails();
@@ -10,7 +9,6 @@ export const getAdminConversations = async (req, res) => {
   }
 };
 
-// Get conversation history
 export const getConversationHistory = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -22,7 +20,6 @@ export const getConversationHistory = async (req, res) => {
   }
 };
 
-// Start new conversation
 export const startConversation = async (req, res) => {
   try {
     const { participantId, participantModel } = req.body;
@@ -46,7 +43,6 @@ export const startConversation = async (req, res) => {
   }
 };
 
-// Close conversation
 export const closeConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -57,7 +53,7 @@ export const closeConversation = async (req, res) => {
   }
 };
 
-// Upload image
+
 export const uploadChatImage = async (req, res) => {
   try {
     if (!req.file) {
