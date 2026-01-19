@@ -1,6 +1,5 @@
 import ChatMessageService from "../services/chatMessage.service.js";
-import { generateRoomId } from "../utils/socketHandler.js";
-
+import { generateRoomId } from "../sockets/rooms.utils.js";
 // List rooms for a user (buyer)
 export const getUserRooms = async (req, res) => {
   try {

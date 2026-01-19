@@ -19,8 +19,7 @@ import inventoryRouter from './routes/inventory.routes.js';
 import superAdminRouter from './routes/superAdmin.routes.js';
 import chatRouter from './routes/chat.routes.js';
 import adminChatRouter from './routes/adminChat.routes.js';
-import { initializeSocketHandlers } from './utils/socketHandler.js';
-
+import { initializeSocketHandlers } from './sockets/index.js';
 
 
 const app = express();
@@ -35,7 +34,12 @@ app.use(
       imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'"]
+      connectSrc: [
+        "'self'",
+        "ws:",
+        "wss:",
+        "http://localhost:5173"
+      ]
     },
   })
 );
@@ -45,22 +49,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // if (process.env.NODE_ENV !== "production") {
-  // app.use(cors());
-  app.use(cors({
-    origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
-    credentials: true,
-  }));
+// app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
+  credentials: true,
+}));
 // }
 
 app.use('/api/products', productrouter);
 app.use('/api/seller/auth', sellerAuthRouter);
-app.use('/api/user/auth',userAuthRouter)
-app.use('/api/cart',cartRouter)
-app.use('/api/order',orderRouter)
-app.use('/api/inventory',inventoryRouter)
-app.use('/api/superadmin',superAdminRouter)
-app.use('/api/admin/chat',adminChatRouter)
-app.use('/api/chat',chatRouter)
+app.use('/api/user/auth', userAuthRouter)
+app.use('/api/cart', cartRouter)
+app.use('/api/order', orderRouter)
+app.use('/api/inventory', inventoryRouter)
+app.use('/api/superadmin', superAdminRouter)
+app.use('/api/admin/chat', adminChatRouter)
+app.use('/api/chat', chatRouter)
 
 // Serve React frontend in production
 if (process.env.NODE_ENV === "production") {
