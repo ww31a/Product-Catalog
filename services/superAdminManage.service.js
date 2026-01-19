@@ -3,42 +3,74 @@ import ProductService from './product.service.js';
 import OrderService from './order.service.js';
 import UserService from './user.service.js';
 import StockHistoryService from './stockHistory.service.js';
-import AppUserService from './appUser.service.js';
+import Seller from '../models/seller.module.js';
+import User from '../models/user.module.js';
 
 class SuperAdminManagementService {
 
   async getAllSellers(query, page = 1, limit = 10) {
-    const sellers = await SellerService.findWithPagination(
-      query,
-      { createdAt: -1 },
-      (page - 1) * limit,
-      limit * 1,
-      "" // no need to exclude anything from Seller itself
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      {
+        $lookup: {
+          from: "appusers",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" }
+    ];
+
+    if (query.status) {
+      pipeline.push({
+        $match: { status: query.status }
+      });
+    }
+
+    if (query.$or) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { "user.name": query.$or[0].name },
+            { "user.email": query.$or[1].email }
+          ]
+        }
+      });
+    }
+
+    pipeline.push(
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: Number(limit) }
     );
 
-    // Step 2: Populate name and email from AppUser
-    const populatedSellers = await Promise.all(
-      sellers.map(async seller => {
-        const user = await AppUserService.findById(seller.userId, "name email");
-        return {
-          _id: seller._id,
-          status: seller.status || "active", // optional if you have status field
-          name: user?.name || "",
-          email: user?.email || ""
-        };
-      })
+    const sellers = await Seller.aggregate(pipeline);
+
+    const countPipeline = pipeline.filter(
+      stage => !("$skip" in stage || "$limit" in stage)
     );
 
-    // Step 3: Count total sellers for pagination
-    const count = await SellerService.countDocuments(query);
+    countPipeline.push({ $count: "total" });
+
+    const countResult = await Seller.aggregate(countPipeline);
+
+    const total = countResult[0]?.total || 0;
 
     return {
-      sellers: populatedSellers,
-      totalPages: Math.ceil(count / limit),
+      sellers: sellers.map(s => ({
+        _id: s._id,
+        status: s.status || "active",
+        name: s.user.name,
+        email: s.user.email
+      })),
+      totalPages: Math.ceil(total / limit),
       currentPage: Number(page),
-      total: count
+      total
     };
   }
+
 
 
   // Delete a seller and all associated data
@@ -155,34 +187,60 @@ class SuperAdminManagementService {
 
   // Get all users with pagination and search
   async getAllUsers(query, page = 1, limit = 10) {
-    // 1️⃣ Find paginated users
-    const users = await UserService.findWithPagination(
-      query,
-      { createdAt: -1 },
-      (page - 1) * limit,
-      limit
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      {
+        $lookup: {
+          from: "appusers",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" }
+    ];
+
+    // Apply search on AppUser fields
+    if (query.$or) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { "user.name": query.$or[0].name },
+            { "user.email": query.$or[1].email }
+          ]
+        }
+      });
+    }
+
+    pipeline.push(
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: Number(limit) }
     );
 
-    const count = await UserService.countDocuments(query);
+    const users = await User.aggregate(pipeline);
 
-    // 2️⃣ Populate name & email from AppUser
-    const populatedUsers = await Promise.all(
-      users.map(async (u) => {
-        const appUser = await AppUserService.findById(u.userId);
-        return {
-          _id: u._id,
-          name: appUser?.name || null,
-          email: appUser?.email || null,
-          createdAt: u.createdAt
-        };
-      })
+    // Count pipeline (without pagination)
+    const countPipeline = pipeline.filter(
+      stage => !("$skip" in stage || "$limit" in stage)
     );
+
+    countPipeline.push({ $count: "total" });
+
+    const countResult = await User.aggregate(countPipeline);
+    const total = countResult[0]?.total || 0;
 
     return {
-      users: populatedUsers,
-      totalPages: Math.ceil(count / limit),
+      users: users.map(u => ({
+        _id: u._id,
+        name: u.user.name,
+        email: u.user.email,
+        createdAt: u.createdAt
+      })),
+      totalPages: Math.ceil(total / limit),
       currentPage: Number(page),
-      total: count
+      total
     };
   }
 
