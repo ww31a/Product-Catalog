@@ -26,10 +26,6 @@ const adminConversationSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Index for efficient querying of user's active conversations
-adminConversationSchema.index({ participantId: 1, participantModel: 1, status: 1 });
-// Index for admin to see their assigned/started chats
-adminConversationSchema.index({ adminId: 1, status: 1 });
 
 const AdminConversation = mongoose.model("AdminConversation", adminConversationSchema);
 export default AdminConversation;

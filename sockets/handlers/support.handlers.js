@@ -4,44 +4,62 @@ import { supportRoomId } from "../rooms.utils.js";
 
 export const setupSupportHandlers = (socket, io, userId) => {
   socket.on("join_support_room", async ({ conversationId }) => {
-    if (!conversationId) return;
+    try {
+      if (!conversationId) return;
 
-    const roomId = supportRoomId(conversationId);
-    socket.join(roomId);
+      const conversation = await AdminConversation.findById(conversationId).populate("participantId");
+      if (!conversation || conversation.participantId.userId.toString() !== userId.toString()) {
+        return socket.emit("error_message", { message: "Unauthorized access to this conversation" });
+      }
 
-    await adminChatService.markAsRead(conversationId, userId);
+      const roomId = supportRoomId(conversationId);
+      socket.join(roomId);
 
-    const messages = await adminChatService.getConversationHistory(conversationId);
-    socket.emit("chat_history", { roomId, messages: messages.reverse() });
+      await adminChatService.markAsRead(conversationId, userId);
+
+      const messages = await adminChatService.getConversationHistory(conversationId);
+      socket.emit("chat_history", { roomId, messages: messages.reverse() });
+    } catch (error) {
+      console.error("[join_support_room] Error:", error.message);
+      socket.emit("error_message", { message: error.message });
+    }
   });
 
-  socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
-    if (!conversationId || (!message && !imageUrl)) return;
+  socket.on("send_support_reply", async ({ conversationId, message }) => {
+    try {
+      if (!conversationId || !message) return;
 
-    const senderModel = socket.user.role === "user" ? "User" : "Seller";
+      const conversation = await AdminConversation.findById(conversationId).populate("participantId");
+      if (!conversation || conversation.participantId.userId.toString() !== userId.toString()) {
+        return socket.emit("error_message", { message: "Unauthorized access to this conversation" });
+      }
 
-    const savedMessage = await adminChatService.sendMessage(
-      conversationId,
-      userId,
-      senderModel,
-      message,
-      imageUrl
-    );
+      const senderModel = socket.user.role === "user" ? "User" : "Seller";
 
-    const roomId = supportRoomId(conversationId);
-    io.to(roomId).emit("new_support_message", {
-      conversationId,
-      message: savedMessage,
-    });
+      const savedMessage = await adminChatService.sendMessage(
+        conversationId,
+        userId,
+        senderModel,
+        message
+      );
 
-    const conversation = await AdminConversation.findById(conversationId);
-    if (conversation?.adminId) {
-      io.to(`user-${conversation.adminId}`).emit("new_message_notification", {
-        roomId,
+      const roomId = supportRoomId(conversationId);
+      io.to(roomId).emit("new_support_message", {
         conversationId,
         message: savedMessage,
-        isAdminChat: true,
       });
+
+      if (conversation?.adminId) {
+        io.to(`user-${conversation.adminId}`).emit("new_message_notification", {
+          roomId,
+          conversationId,
+          message: savedMessage,
+          isAdminChat: true,
+        });
+      }
+    } catch (error) {
+      console.error("[send_support_reply] Error:", error.message);
+      socket.emit("error_message", { message: error.message });
     }
   });
 };
