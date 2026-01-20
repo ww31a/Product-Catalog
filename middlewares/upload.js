@@ -1,6 +1,4 @@
 import multer from "multer";
-import { CloudinaryStorage } from "multer-storage-cloudinary";
-import cloudinary from "../config/cloudinary.js";
 
 const allowedTypes = [
   "image/jpeg",
@@ -15,27 +13,10 @@ const fileFilter = (req, file, cb) => {
   else cb(new Error("Only images or PDF files are allowed"));
 };
 
-
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "product_catalog",
-    format: async (req, file) => {
-      const mimeMap = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-        "image/gif": "gif",
-      };
-      return mimeMap[file.mimetype] || "jpg";
-    },
-    public_id: (req, file) => {
-      const safeName = file.originalname.replace(/[^a-zA-Z0-9-_\.]/g, "_");
-      return `${Date.now()}_${safeName}`;
-    }
-  },
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
-
-const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
 export default upload;

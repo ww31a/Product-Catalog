@@ -8,7 +8,7 @@ import {
     closeConversation,
     uploadChatImage
 } from "../controllers/adminChat.controller.js";
-import upload from "../middlewares/upload.js";
+import chatUpload from "../middlewares/chatUpload.js";
 
 const adminChatRouter = express.Router();
 
@@ -28,7 +28,7 @@ adminChatRouter.post("/conversations", startConversation);
 adminChatRouter.patch("/conversations/:conversationId/close", closeConversation);
 
 // Upload image for chat
-adminChatRouter.post("/upload", upload.single("image"), uploadChatImage);
+adminChatRouter.post("/upload", chatUpload.single("image"), uploadChatImage);
 
 // Get available participants
 // adminChatRouter.get("/participants", getAvailableParticipants);

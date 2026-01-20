@@ -14,13 +14,14 @@ export const setupSellerHandlers = (socket, io) => {
       const messages = await chatMessageService.findByRoomId(roomId);
 
       socket.emit("chat_history", { roomId, messages: messages.reverse() });
+
     } catch (error) {
       console.error("[join_seller_chat_room] Error:", error.message);
       socket.emit("error_message", { message: error.message });
     }
   });
 
-  socket.on("send_seller_message", async ({ targetUserId, message /*, imageUrl */ }) => {
+  socket.on("send_seller_message", async ({ targetUserId, message , imageUrl  }) => {
     try {
       const roomId = generateRoomId(targetUserId, sellerId);
 
@@ -31,7 +32,7 @@ export const setupSellerHandlers = (socket, io) => {
         senderId: sellerId,
         senderRole: "seller",
         message,
-        // image: imageUrl,  
+        image: imageUrl,  
       });
 
       io.to(roomId).emit("new_message", { roomId, message: chatMessage });
@@ -39,6 +40,7 @@ export const setupSellerHandlers = (socket, io) => {
         roomId,
         message: chatMessage,
       });
+      
     } catch (error) {
       console.error("[send_seller_message] Error:", error.message);
       socket.emit("error_message", { message: error.message });

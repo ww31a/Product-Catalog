@@ -19,13 +19,14 @@ export const setupSupportHandlers = (socket, io, userId) => {
 
       const messages = await adminChatService.getConversationHistory(conversationId);
       socket.emit("chat_history", { roomId, messages: messages.reverse() });
+      
     } catch (error) {
       console.error("[join_support_room] Error:", error.message);
       socket.emit("error_message", { message: error.message });
     }
   });
 
-  socket.on("send_support_reply", async ({ conversationId, message }) => {
+  socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
     try {
       if (!conversationId || !message) return;
 
@@ -40,7 +41,8 @@ export const setupSupportHandlers = (socket, io, userId) => {
         conversationId,
         userId,
         senderModel,
-        message
+        message,
+        imageUrl
       );
 
       const roomId = supportRoomId(conversationId);

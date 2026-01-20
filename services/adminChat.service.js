@@ -33,16 +33,21 @@ class AdminChatService {
         return conversation;
     }
 
-    async sendMessage(conversationId, senderId, senderModel, messageText) {
+    async sendMessage(conversationId, senderId, senderModel, messageText, imageUrl) {
         const conversation = await AdminConversation.findById(conversationId);
         if (!conversation) throw new Error("Conversation not found");
         if (conversation.status === "closed") throw new Error("Conversation is closed");
+
+        if ((!messageText || !messageText.trim()) && !imageUrl) {
+            throw new Error("Message or image is required");
+        }
 
         const message = await AdminMessage.create({
             conversationId,
             senderId,
             senderModel,
-            message: messageText?.trim(),
+            message: messageText?.trim() || null,
+            image: imageUrl || null,
             read: false
         });
 
