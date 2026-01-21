@@ -46,6 +46,9 @@ export const addProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: "Image is required" });
     }
 
+    const result = await uploadBufferToCloudinary(req.file.buffer, "product_catalog");
+
+
     // Parse sizes
     let parsedSizes = [];
     if (sizes) {
@@ -65,7 +68,7 @@ export const addProduct = async (req, res) => {
       brand,
       category,
       sizes: parsedSizes,
-      image: req.file?.path || "",
+      image: result.secure_url,
       owner: sellerId
     });
 
@@ -104,7 +107,19 @@ export const updateProduct = async (req, res) => {
     }
 
     const updatedData = { ...req.body };
-    if (req.file) updatedData.image = req.file.path;
+
+    // If new file uploaded, compress + upload to Cloudinary
+    if (req.file?.buffer) {
+      const compressedBuffer = await sharp(req.file.buffer)
+        .rotate()
+        .resize({ width: 1280, withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+
+      const result = await uploadBufferToCloudinary(compressedBuffer, "product_catalog");
+      updatedData.image = result.secure_url;
+    }
+
 
     // Parse sizes
     if (updatedData.sizes) {

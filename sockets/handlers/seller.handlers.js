@@ -14,15 +14,23 @@ export const setupSellerHandlers = (socket, io) => {
       const messages = await chatMessageService.findByRoomId(roomId);
 
       socket.emit("chat_history", { roomId, messages: messages.reverse() });
+
     } catch (error) {
       console.error("[join_seller_chat_room] Error:", error.message);
       socket.emit("error_message", { message: error.message });
     }
   });
 
-  socket.on("send_seller_message", async ({ targetUserId, message /*, imageUrl */ }) => {
+  socket.on("send_seller_message", async ({ targetUserId, message, image, pdf }) => {
     try {
       const roomId = generateRoomId(targetUserId, sellerId);
+
+      const imageUrl = typeof image === 'string' ? image : image?.imageUrl;
+      const pdfUrl = typeof pdf === 'string' ? pdf : pdf?.downloadUrl;
+
+      if (!message && !imageUrl && !pdfUrl) {
+        return socket.emit("error_message", { message: "Message, image, or PDF is required" });
+      }
 
       const chatMessage = await chatMessageService.create({
         roomId,
@@ -30,8 +38,9 @@ export const setupSellerHandlers = (socket, io) => {
         sellerId,
         senderId: sellerId,
         senderRole: "seller",
-        message,
-        // image: imageUrl,  
+        message: message || null,
+        image: imageUrl || null,
+        pdf: pdfUrl || null,
       });
 
       io.to(roomId).emit("new_message", { roomId, message: chatMessage });
@@ -39,6 +48,7 @@ export const setupSellerHandlers = (socket, io) => {
         roomId,
         message: chatMessage,
       });
+
     } catch (error) {
       console.error("[send_seller_message] Error:", error.message);
       socket.emit("error_message", { message: error.message });

@@ -7,11 +7,11 @@ class ChatMessageService {
 
     async findByRoomId(roomId, limit = 50, before = null) {
         const query = { roomId };
-        
+
         if (before) {
             query.createdAt = { $lt: before };
         }
-        
+
         // Return in ascending order (oldest first) for display
         return await ChatMessage.find(query)
             .sort({ createdAt: 1 })
@@ -51,11 +51,14 @@ class ChatMessageService {
                     _id: "$roomId",
                     userId: { $first: "$userId" },
                     sellerId: { $first: "$sellerId" },
-                    lastMessage: { $first: "$message" },
+                    lastMessageText: { $first: "$message" },      // ✅ Just get the fields
+                    lastMessageImage: { $first: "$image" },
+                    lastMessagePdf: { $first: "$pdf" },
                     lastMessageTime: { $first: "$createdAt" },
                     lastSenderId: { $first: "$senderId" },
                     lastSenderRole: { $first: "$senderRole" },
                     lastImage: { $first: "$image" },
+                    lastPdf: { $first: "$pdf" },
                     unreadCount: {
                         $sum: {
                             $cond: [
@@ -70,6 +73,58 @@ class ChatMessageService {
                             ]
                         }
                     }
+                }
+            },
+            {
+                $addFields: {
+                    participantId: {
+                        $cond: [
+                            { $eq: [role, "user"] },
+                            "$sellerId",
+                            "$userId"
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    participantObjectId: { $toObjectId: "$participantId" }
+                }
+            },
+            {
+                $lookup: {
+                    from: "appusers",
+                    localField: "participantObjectId",
+                    foreignField: "_id",
+                    as: "participantInfo"
+                }
+            },
+            {
+                $addFields: {
+                    name: { $arrayElemAt: ["$participantInfo.name", 0] },
+                    lastMessage: {
+                        $cond: [
+                            { $ne: ["$lastMessageText", null] },
+                            "$lastMessageText",
+                            {
+                                $cond: [
+                                    { $ne: ["$lastMessageImage", null] },
+                                    "[Image]",
+                                    { $cond: [{ $ne: ["$lastMessagePdf", null] }, "[PDF]", ""] }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                $project: {  // ✅ Remove temporary fields
+                    participantInfo: 0,
+                    participantObjectId: 0,
+                    participantId: 0,
+                    lastMessageText: 0,
+                    lastMessageImage: 0,
+                    lastMessagePdf: 0
                 }
             },
             { $sort: { lastMessageTime: -1 } }
@@ -93,7 +148,7 @@ class ChatMessageService {
                 _id: messageId,
                 senderId: userId
             },
-            { 
+            {
                 message: newMessage.trim(),
                 edited: true,
                 editedAt: new Date()

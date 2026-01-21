@@ -20,13 +20,18 @@ export const setupAdminHandlers = (socket, io) => {
     }
   });
 
-  socket.on("admin_send_message", async ({ conversationId, message }) => {
+  socket.on("admin_send_message", async ({ conversationId, message, image, pdf }) => {
     try {
+      const imageUrl = typeof image === 'string' ? image : image?.imageUrl;
+      const pdfUrl = typeof pdf === 'string' ? pdf : pdf?.downloadUrl;
+
       const savedMessage = await adminChatService.sendMessage(
         conversationId,
         adminId,
         "SuperAdmin",
-        message
+        message,
+        imageUrl,
+        pdfUrl
       );
 
       const roomId = supportRoomId(conversationId);

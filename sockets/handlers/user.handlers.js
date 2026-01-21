@@ -20,8 +20,15 @@ export const setupUserHandlers = (socket, io) => {
     }
   });
 
-  socket.on("send_message", async ({ sellerId, message /*, imageUrl */ }) => {
+  socket.on("send_message", async ({ sellerId, message, image, pdf }) => {
     try {
+      const imageUrl = typeof image === 'string' ? image : image?.imageUrl;
+      const pdfUrl = typeof pdf === 'string' ? pdf : pdf?.downloadUrl;
+
+      if (!message && !imageUrl && !pdfUrl) {
+        return socket.emit("error_message", { message: "Message, image, or PDF is required" });
+      }
+
       const roomId = generateRoomId(userId, sellerId);
 
       const chatMessage = await chatMessageService.create({
@@ -30,8 +37,9 @@ export const setupUserHandlers = (socket, io) => {
         sellerId,
         senderId: userId,
         senderRole: "user",
-        message,
-        // image: imageUrl,  // TODO: Image support not yet implemented in frontend
+        message: message || null,
+        image: imageUrl || null,
+        pdf: pdfUrl || null,
       });
 
       io.to(roomId).emit("new_message", { roomId, message: chatMessage });
