@@ -74,7 +74,6 @@ export const uploadChatImage = async (req, res) => {
     let result;
     let type;
     let finalUrl;
-    let previewUrl;
 
     if (req.file.mimetype.startsWith("image/")) {
       const compressedBuffer = await sharp(req.file.buffer)
