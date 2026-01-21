@@ -16,7 +16,7 @@ const chatMessageSchema = new mongoose.Schema({
     },
     senderId: {
         type: String,
-        required: true 
+        required: true
     },
     senderRole: {
         type: String,
@@ -26,15 +26,15 @@ const chatMessageSchema = new mongoose.Schema({
     message: {
         type: String,
         required: function () {
-            return !this.image;
+            return !this.image && !this.pdf;
         },
         trim: true
     },
     image: {
         type: String,
-        required: function () {
-            return !this.message;
-        }
+    },
+    pdf: {
+        type: String,
     },
     read: {
         type: Boolean,

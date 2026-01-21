@@ -19,16 +19,16 @@ export const setupSupportHandlers = (socket, io, userId) => {
 
       const messages = await adminChatService.getConversationHistory(conversationId);
       socket.emit("chat_history", { roomId, messages: messages.reverse() });
-      
+
     } catch (error) {
       console.error("[join_support_room] Error:", error.message);
       socket.emit("error_message", { message: error.message });
     }
   });
 
-  socket.on("send_support_reply", async ({ conversationId, message, imageUrl }) => {
+  socket.on("send_support_reply", async ({ conversationId, message, image, pdf }) => {
     try {
-      if (!conversationId || !message) return;
+      if (!conversationId) return;
 
       const conversation = await AdminConversation.findById(conversationId).populate("participantId");
       if (!conversation || conversation.participantId.userId.toString() !== userId.toString()) {
@@ -37,12 +37,20 @@ export const setupSupportHandlers = (socket, io, userId) => {
 
       const senderModel = socket.user.role === "user" ? "User" : "Seller";
 
+      const imageUrl = typeof image === 'string' ? image : image?.imageUrl;
+      const pdfUrl = typeof pdf === 'string' ? pdf : pdf?.downloadUrl;
+
+      if (!message && !imageUrl && !pdfUrl) {
+        return socket.emit("error_message", { message: "Message, image, or PDF is required" });
+      }
+
       const savedMessage = await adminChatService.sendMessage(
         conversationId,
         userId,
         senderModel,
         message,
-        imageUrl
+        imageUrl,
+        pdfUrl
       );
 
       const roomId = supportRoomId(conversationId);

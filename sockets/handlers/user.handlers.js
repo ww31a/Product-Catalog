@@ -20,11 +20,13 @@ export const setupUserHandlers = (socket, io) => {
     }
   });
 
-  socket.on("send_message", async ({ sellerId, message, imageUrl }) => {
+  socket.on("send_message", async ({ sellerId, message, image, pdf }) => {
     try {
+      const imageUrl = typeof image === 'string' ? image : image?.imageUrl;
+      const pdfUrl = typeof pdf === 'string' ? pdf : pdf?.downloadUrl;
 
-      if (!message && !imageUrl) {
-        return socket.emit("error_message", { message: "Message or image is required" });
+      if (!message && !imageUrl && !pdfUrl) {
+        return socket.emit("error_message", { message: "Message, image, or PDF is required" });
       }
 
       const roomId = generateRoomId(userId, sellerId);
@@ -37,6 +39,7 @@ export const setupUserHandlers = (socket, io) => {
         senderRole: "user",
         message: message || null,
         image: imageUrl || null,
+        pdf: pdfUrl || null,
       });
 
       io.to(roomId).emit("new_message", { roomId, message: chatMessage });
