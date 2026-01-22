@@ -11,28 +11,60 @@ const getUserCart = async (req, res) => {
 
     const productIds = Object.keys(cartData).filter(id => ObjectId.isValid(id));
 
+    if (!productIds.length) {
+      return res.json({
+        success: true,
+        cartData: [],
+        removedItems: []
+      });
+    }
+
     const products = await ProductService.findByIdsWithSelect(
       productIds,
       "title price image sizes stock"
     );
 
-    const cartArray = products.map(p => {
-      const item = cartData[p._id] || { quantity: 0, size: null };
-      return {
-        _id: p._id,
-        quantity: item.quantity,
-        size: item.size,                    
-        title: p.title,
-        price: p.price,
-        image: p.image,
-        availableSizes: p.sizes || [],      
-        hasSizes: !!p.sizes?.length         
-      };
+    const validCartItems = [];
+    const removedItems = [];
+
+    for (const product of products) {
+      const cartItem = cartData[product._id];
+
+      if (product.stock <= 0) {
+        await UserService.removeCartItem(req.auth.userId, product._id);
+
+        removedItems.push({
+          productId: product._id,
+          title: product.title,
+          reason: "Out of stock"
+        });
+
+        continue;
+      }
+
+      validCartItems.push({
+        _id: product._id,
+        quantity: cartItem.quantity,
+        size: cartItem.size,
+        title: product.title,
+        price: product.price,
+        image: product.image,
+        availableSizes: product.sizes || [],
+        hasSizes: !!product.sizes?.length
+      });
+    }
+
+    return res.json({
+      success: true,
+      cartData: validCartItems,
+      removedItems
     });
 
-    res.json({ success: true, cartData: cartArray });
   } catch (err) {
-    res.status(500).json({ error: true, message: err.message });
+    res.status(500).json({
+      error: true,
+      message: err.message
+    });
   }
 };
 

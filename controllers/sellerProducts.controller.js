@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import ProductService from '../services/product.service.js';
 import StockHistoryService from "../services/stockHistory.service.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 
 export const getSellerProducts = async (req, res) => {
   try {
@@ -42,7 +43,7 @@ export const addProduct = async (req, res) => {
     const { title, description, stock, price, brand, category, sizes } = req.body;
     const sellerId = req.auth.userId;
 
-    if (!req.file?.path) {
+    if (!req.file?.buffer) {
       return res.status(400).json({ success: false, message: "Image is required" });
     }
 

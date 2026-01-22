@@ -20,6 +20,7 @@ import superAdminRouter from './routes/superAdmin.routes.js';
 import chatRouter from './routes/chat.routes.js';
 import adminChatRouter from './routes/adminChat.routes.js';
 import { initializeSocketHandlers } from './sockets/index.js';
+import meRouter from './routes/me.js';
 
 
 const app = express();
@@ -56,6 +57,7 @@ app.use(cors({
 }));
 // }
 
+app.use('/api/me',meRouter);
 app.use('/api/products', productrouter);
 app.use('/api/seller/auth', sellerAuthRouter);
 app.use('/api/user/auth', userAuthRouter)

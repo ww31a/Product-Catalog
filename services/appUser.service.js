@@ -17,6 +17,16 @@ class AppUserService {
       verificationCode: code
     });
   }
+  async findByAppUserIdWithSelect(userId, select) {
+    return User.findOne({ appUserId: userId }).select(select);
+  };
+
+  async removeCartItem(userId, productId) {
+    return User.updateOne(
+      { appUserId: userId },
+      { $unset: { [`cartData.${productId}`]: "" } }
+    );
+  };
 
   // USED: auth controllers (user/seller login)
   async findByEmailWithRole(email, role) {
