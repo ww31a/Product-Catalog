@@ -4,6 +4,7 @@ import SellerService from "../services/seller.service.js";
 import SuperAdminService from "../services/superAdmin.service.js";
 import OrderService from "../services/order.service.js";
 import ChatMessageService from "../services/chatMessage.service.js";
+import AdminChatService from "../services/adminChat.service.js";
 
 export const getMe = async (req, res) => {
   try {
@@ -11,7 +12,7 @@ export const getMe = async (req, res) => {
 
     let response = {};
 
-    if (role === "superAdmin") {
+    if (role === "superadmin") {
       // SuperAdmin basic info
       const admin = await SuperAdminService.findById(userId);
       if (!admin)
@@ -25,7 +26,10 @@ export const getMe = async (req, res) => {
         createdAt: admin.createdAt,
       };
 
-      // Optionally, you could add some lightweight counts for admin dashboard here
+      // Unread messages for admin
+      const adminConversations = await AdminChatService.getAllConversationsWithDetails();
+      const adminUnread = adminConversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0);
+      response.unreadMessages = adminUnread;
 
     } else {
       // user or seller
@@ -43,19 +47,24 @@ export const getMe = async (req, res) => {
 
       // ----- User-specific data -----
       if (appUser.roles.includes("user")) {
-        // Cart count
+        // Cart count (total quantity)
         const userData = await UserService.findByUserId(userId);
         const cartData = userData?.cartData || {};
-        response.cartCount = Object.keys(cartData).length;
+        const totalQty = Object.values(cartData).reduce((acc, item) => acc + (item.quantity || 0), 0);
+        response.cartCount = totalQty;
 
         // Order count
         const orderCount = await OrderService.countDocuments({ userId });
         response.orderCount = orderCount;
 
-        // Unread chat messages
+        // Unread chat messages (regular + admin support)
         const rooms = await ChatMessageService.getUserRooms(userId, "user");
-        const unreadMessages = rooms.reduce((acc, room) => acc + (room.unreadCount || 0), 0);
-        response.unreadMessages = unreadMessages;
+        const adminRooms = await AdminChatService.getParticipantConversations(userId);
+
+        const chatUnread = rooms.reduce((acc, room) => acc + (room.unreadCount || 0), 0);
+        const adminUnread = adminRooms.reduce((acc, room) => acc + (room.unreadCount || 0), 0);
+
+        response.unreadMessages = chatUnread + adminUnread;
       }
 
       // ----- Seller-specific data -----
@@ -63,10 +72,14 @@ export const getMe = async (req, res) => {
         const sellerData = await SellerService.findByUserId(userId);
         response.sellerData = sellerData || {};
 
-        // Unread chat messages for seller
+        // Unread chat messages for seller (regular + admin support)
         const rooms = await ChatMessageService.getUserRooms(userId, "seller");
-        const unreadMessages = rooms.reduce((acc, room) => acc + (room.unreadCount || 0), 0);
-        response.unreadMessages = unreadMessages;
+        const adminRooms = await AdminChatService.getParticipantConversations(userId);
+
+        const chatUnread = rooms.reduce((acc, room) => acc + (room.unreadCount || 0), 0);
+        const adminUnread = adminRooms.reduce((acc, room) => acc + (room.unreadCount || 0), 0);
+
+        response.unreadMessages = chatUnread + adminUnread;
       }
     }
 

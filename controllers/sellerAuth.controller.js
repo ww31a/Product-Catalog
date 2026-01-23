@@ -4,6 +4,7 @@ import { generateToken } from '../utils/generateToken.js';
 import AppUserService from "../services/appUser.service.js";
 import sellerService from "../services/seller.service.js";
 import { sendVerificationCode } from "../config/email.js";
+import { logActivity, logError, logSecurity } from "../utils/logger.js";
 
 const generateSecureOTP = () => {
   const otp = crypto.randomInt(100000, 999999).toString();
@@ -47,6 +48,19 @@ export const sellerRegister = async (req, res) => {
 
     try {
       await sendVerificationCode(email, verificationCode);
+
+      logActivity({
+        email,
+        action: "REGISTER",
+        role: "Seller",
+        status: "success",
+        target: seller._id.toString(),
+        user: seller._id,
+        userTypeModel: "AppUser",
+        message: `New seller registered: ${email}`,
+        ip: req.ip,
+        userAgent: req.get("User-Agent")
+      });
     } catch {
       return res.status(201).json({
         success: true,
@@ -62,6 +76,11 @@ export const sellerRegister = async (req, res) => {
     });
 
   } catch (err) {
+    logError({
+      error: err,
+      context: "Seller Registration",
+      metadata: { email: req.body.email }
+    });
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -84,6 +103,13 @@ export const verifySellerEmail = async (req, res) => {
     }
 
     if (new Date() > seller.verificationCodeExpiresAt) {
+      logSecurity({
+        event: "OTP_EXPIRED",
+        severity: "warn",
+        user: seller._id,
+        ip: req.ip,
+        message: `Email verification OTP expired for seller: ${seller.email}`,
+      });
       return res.status(400).json({
         success: false,
         message: "Verification code expired",
@@ -97,6 +123,19 @@ export const verifySellerEmail = async (req, res) => {
     seller.verificationCodeExpiresAt = undefined;
     await seller.save();
 
+    logActivity({
+      email: seller.email,
+      action: "EMAIL_VERIFY",
+      role: "Seller",
+      status: "success",
+      target: seller._id.toString(),
+      user: seller._id,
+      userTypeModel: "AppUser",
+      message: `Seller email verified: ${seller.email}`,
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
     return res.status(200).json({
       success: true,
       message: "Email verified. Please login.",
@@ -104,6 +143,11 @@ export const verifySellerEmail = async (req, res) => {
     });
 
   } catch (err) {
+    logError({
+      error: err,
+      context: "Seller Email Verification",
+      metadata: { email: req.body.email }
+    });
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -116,11 +160,24 @@ export const sellerLogin = async (req, res) => {
 
     const seller = await AppUserService.findByEmailWithRole(email, "seller");
     if (!seller) {
+      logSecurity({
+        event: "LOGIN_FAILED",
+        severity: "warn",
+        ip: req.ip,
+        message: `Login attempt for non-existent seller: ${email}`,
+      });
       return res.status(404).json({ success: false, message: "Seller not found" });
     }
 
     const match = await bcrypt.compare(password, seller.password);
     if (!match) {
+      logSecurity({
+        event: "LOGIN_FAILED",
+        severity: "warn",
+        user: seller._id,
+        ip: req.ip,
+        message: `Invalid password for seller: ${email}`,
+      });
       return res.status(400).json({ success: false, message: "Invalid credentials" });
     }
 
@@ -170,6 +227,13 @@ export const verifySellerLoginOTP = async (req, res) => {
     }
 
     if (new Date() > seller.verificationCodeExpiresAt) {
+      logSecurity({
+        event: "LOGIN_OTP_EXPIRED",
+        severity: "warn",
+        user: seller._id,
+        ip: req.ip,
+        message: `Login OTP expired for seller: ${seller.email}`,
+      });
       return res.status(400).json({
         success: false,
         message: "Verification code expired",
@@ -186,6 +250,19 @@ export const verifySellerLoginOTP = async (req, res) => {
       id: seller._id,
       role: "seller",
       roles: seller.roles
+    });
+
+    logActivity({
+      email: seller.email,
+      action: "LOGIN",
+      role: "Seller",
+      status: "success",
+      target: seller._id.toString(),
+      user: seller._id,
+      userTypeModel: "AppUser",
+      message: `Seller logged in successfully: ${seller.email}`,
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
     });
 
     return res.status(200).json({
@@ -225,6 +302,18 @@ export const resendSellerVerificationCode = async (req, res) => {
 
     await sendVerificationCode(email, otp);
 
+    logActivity({
+      email,
+      action: "RESEND_CODE",
+      role: "Seller",
+      status: "success",
+      user: seller._id,
+      userTypeModel: "AppUser",
+      message: `Verification code resent to seller: ${email}`,
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
     return res.status(200).json({
       success: true,
       message: "Verification code sent",
@@ -232,6 +321,11 @@ export const resendSellerVerificationCode = async (req, res) => {
     });
 
   } catch (err) {
+    logError({
+      error: err,
+      context: "Resend Seller Verification Code",
+      metadata: { email: req.body.email }
+    });
     return res.status(500).json({ success: false, message: err.message });
   }
 };

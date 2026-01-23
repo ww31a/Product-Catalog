@@ -20,6 +20,10 @@ import superAdminRouter from './routes/superAdmin.routes.js';
 import chatRouter from './routes/chat.routes.js';
 import adminChatRouter from './routes/adminChat.routes.js';
 import { initializeSocketHandlers } from './sockets/index.js';
+import activityRouter from './routes/activity.routes.js';
+import { loggingMiddleware } from './middlewares/logging.middleware.js';
+import { uploadLogsCronJob } from './utils/uploadLogsToCloudinary.js';
+import { logSystem, logError } from './utils/logger.js';
 import meRouter from './routes/me.js';
 
 
@@ -27,6 +31,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Apply logging middleware FIRST
+app.use(loggingMiddleware);
 
 app.use(
   helmet.contentSecurityPolicy({
@@ -49,15 +56,12 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// if (process.env.NODE_ENV !== "production") {
-// app.use(cors());
 app.use(cors({
   origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
   credentials: true,
 }));
-// }
 
-app.use('/api/me',meRouter);
+app.use('/api/me', meRouter);
 app.use('/api/products', productrouter);
 app.use('/api/seller/auth', sellerAuthRouter);
 app.use('/api/user/auth', userAuthRouter)
@@ -67,27 +71,40 @@ app.use('/api/inventory', inventoryRouter)
 app.use('/api/superadmin', superAdminRouter)
 app.use('/api/admin/chat', adminChatRouter)
 app.use('/api/chat', chatRouter)
+app.use('/api/activity', activityRouter)
 
 // Serve React frontend in production
 if (process.env.NODE_ENV === "production") {
   const distPath = join(__dirname, "frontend", "dist");
   app.use(express.static(distPath));
 
-  // Send index.html for all unknown routes
   app.get("*", (req, res) => {
     res.sendFile(join(distPath, "index.html"));
   });
 }
 
-
 const startServer = async () => {
   try {
+    // Log system startup attempt
+    logSystem({
+      event: "SERVER_START",
+      message: `Server starting on port ${PORT}`,
+      metadata: { port: PORT, env: process.env.NODE_ENV }
+    });
+
     await connectDB();
 
-    // Wrap Express app in HTTP server
+    // Log DB connection success
+    logSystem({
+      event: "DATABASE_CONNECTED",
+      message: "MongoDB connection established"
+    });
+
+    // Start cron job for log uploads
+    uploadLogsCronJob();
+
     const httpServer = http.createServer(app);
 
-    // Initialize Socket.IO
     const io = new Server(httpServer, {
       cors: {
         origin: ["http://localhost:5173", "http://192.168.18.22:5173"],
@@ -96,14 +113,22 @@ const startServer = async () => {
       },
     });
 
-    // Initialize chat socket handlers
     initializeSocketHandlers(io);
 
-    // Start HTTP server (not app.listen)
     httpServer.listen(PORT, "0.0.0.0", () => {
+      logSystem({
+        event: "SERVER_READY",
+        message: `Server running on port ${PORT}`,
+        metadata: { port: PORT }
+      });
       console.log(`Server running on http://localhost:${PORT}`);
     });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Server Startup",
+      metadata: { port: PORT }
+    });
     console.error("Startup failed", err);
   }
 };

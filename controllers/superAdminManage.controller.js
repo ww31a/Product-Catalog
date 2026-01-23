@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 import SuperAdminManagementService from "../services/superAdminManage.service.js";
+import { logActivity } from "../utils/logger.js";
+import SuperAdmin from "../models/superAdmin.module.js";
 
 export const getAllSellers = async (req, res) => {
     try {
@@ -44,6 +46,19 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
+        const admin = await SuperAdmin.findById(req.user.id);
+        logActivity({
+            email: admin?.email,
+            user: req.user.id,
+            role: "Admin",
+            status: "success",
+            target: sellerId,
+            action: "DELETE_SELLER",
+            message: `Admin deleted seller: ${sellerId}`,
+            ip: req.ip,
+            userAgent: req.get("User-Agent")
+        });
+
         res.json({
             success: true,
             message: "Seller and associated data deleted successfully"
@@ -81,6 +96,20 @@ export const bulkDeleteSellers = async (req, res) => {
                 message: "No sellers found with provided IDs"
             });
         }
+
+        const admin = await SuperAdmin.findById(req.user.id);
+        logActivity({
+            email: admin?.email,
+            user: req.user.id,
+            role: "Admin",
+            status: "success",
+            target: sellerIds.join(","),
+            action: "BULK_DELETE_SELLERS",
+            message: `Admin bulk deleted ${deleteResult.deletedCount} sellers`,
+            metadata: { sellerIds },
+            ip: req.ip,
+            userAgent: req.get("User-Agent")
+        });
 
         res.json({
             success: true,
@@ -176,7 +205,7 @@ export const getAllOrders = async (req, res) => {
         const { status, search, page = 1, limit = 10 } = req.query;
 
         const query = {};
-        
+
         if (status) {
             query.status = status;
         }
