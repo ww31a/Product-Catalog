@@ -159,27 +159,3 @@ export const getMyActivity = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
-/**
- * Get failed/suspicious activity (Security monitoring)
- * O(log n) with status index
- */
-export const getFailedActivity = async (req, res) => {
-    try {
-        const { page = 1, limit = 20, startDate, endDate } = req.query;
-
-        const result = await ActivityLog.getFailedActions({
-            page,
-            limit,
-            startDate,
-            endDate
-        });
-
-        res.status(200).json({
-            success: true,
-            ...result
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};

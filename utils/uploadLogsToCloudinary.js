@@ -1,23 +1,25 @@
 import cron from "node-cron";
-import { v2 as cloudinary } from "cloudinary";
 import fs from "fs/promises";
 import path from "path";
 import { logSystem } from "./logger.js";
-
-// Configure Cloudinary
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import cloudinary from '../config/cloudinary.js'
 
 const LOG_DIR = process.env.LOG_DIR || "logs";
 
-/**
- * Upload a single log file to Cloudinary
- */
 const uploadLogFile = async (filePath, type) => {
     try {
+        // Check if file exists and is not empty
+        const stats = await fs.stat(filePath);
+        if (stats.size === 0) {
+            logSystem({
+                event: "LOG_UPLOAD_SKIPPED",
+                level: "warn",
+                message: `Skipped empty file: ${path.basename(filePath)}`,
+                metadata: { filePath }
+            });
+            return null;
+        }
+
         const fileName = path.basename(filePath);
         const env = process.env.NODE_ENV || "development";
 
@@ -132,8 +134,8 @@ const uploadServerLogs = async () => {
  * Main cron job function
  */
 export const uploadLogsCronJob = () => {
-    // Run daily at 2 AM
-    cron.schedule("0 2 * * *", async () => {
+    // Run daily at 4:20 PM
+    cron.schedule("20 16 * * *", async () => {
         logSystem({
             event: "CRON_START",
             level: "info",
@@ -162,7 +164,7 @@ export const uploadLogsCronJob = () => {
     logSystem({
         event: "CRON_INITIALIZED",
         level: "info",
-        message: "Log upload cron job initialized (runs daily at 2 AM)"
+        message: "Log upload cron job initialized (runs daily at 4:20 PM)"
     });
 };
 

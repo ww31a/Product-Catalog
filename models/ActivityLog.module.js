@@ -64,9 +64,9 @@ const activityLogSchema = new mongoose.Schema(
             default: {},
         },
     },
-    { 
-        timestamps: { createdAt: "timestamp", updatedAt: false }, 
-        minimize: false 
+    {
+        timestamps: { createdAt: "timestamp", updatedAt: false },
+        minimize: false
     }
 );
 
@@ -88,10 +88,10 @@ activityLogSchema.index({ action: 1, timestamp: -1 });
 activityLogSchema.index({ role: 1, timestamp: -1 });
 
 // 6. Compound index for complex admin queries
-activityLogSchema.index({ 
-    role: 1, 
-    action: 1, 
-    timestamp: -1 
+activityLogSchema.index({
+    role: 1,
+    action: 1,
+    timestamp: -1
 });
 
 // 7. Status filtering (failed actions, security)
@@ -111,9 +111,9 @@ activityLogSchema.index({ status: 1, timestamp: -1 });
  * Get user activity (optimized - no populate)
  * O(log n) due to index on user + timestamp
  */
-activityLogSchema.statics.getUserActivity = async function(userId, { page = 1, limit = 20, startDate, endDate } = {}) {
+activityLogSchema.statics.getUserActivity = async function (userId, { page = 1, limit = 20, startDate, endDate } = {}) {
     const query = { user: userId };
-    
+
     if (startDate || endDate) {
         query.timestamp = {};
         if (startDate) query.timestamp.$gte = new Date(startDate);
@@ -145,11 +145,11 @@ activityLogSchema.statics.getUserActivity = async function(userId, { page = 1, l
  * Get activity by role (optimized)
  * O(log n) due to compound index
  */
-activityLogSchema.statics.getActivityByRole = async function(role, { page = 1, limit = 20, action, startDate, endDate } = {}) {
+activityLogSchema.statics.getActivityByRole = async function (role, { page = 1, limit = 20, action, startDate, endDate } = {}) {
     const query = { role };
-    
+
     if (action) query.action = action;
-    
+
     if (startDate || endDate) {
         query.timestamp = {};
         if (startDate) query.timestamp.$gte = new Date(startDate);
@@ -177,38 +177,5 @@ activityLogSchema.statics.getActivityByRole = async function(role, { page = 1, l
     };
 };
 
-/**
- * Get failed actions (security monitoring)
- * O(log n) due to index on status + timestamp
- */
-activityLogSchema.statics.getFailedActions = async function({ page = 1, limit = 20, startDate, endDate } = {}) {
-    const query = { status: "failure" };
-    
-    if (startDate || endDate) {
-        query.timestamp = {};
-        if (startDate) query.timestamp.$gte = new Date(startDate);
-        if (endDate) query.timestamp.$lte = new Date(endDate);
-    }
-
-    const [logs, total] = await Promise.all([
-        this.find(query)
-            .sort({ timestamp: -1 })
-            .skip((page - 1) * limit)
-            .limit(parseInt(limit))
-            .lean(),
-        this.countDocuments(query)
-    ]);
-
-    return {
-        logs,
-        pagination: {
-            total,
-            page: parseInt(page),
-            limit: parseInt(limit),
-            totalPages: Math.ceil(total / limit)
-        }
-    };
-};
-
 const ActivityLog = mongoose.model("ActivityLog", activityLogSchema);
-export default ActivityLog;
+export default ActivityLog;                                                                                                                                                                                                                         

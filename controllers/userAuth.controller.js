@@ -5,7 +5,7 @@ import { mergeGuestCartIntoUserCart } from "../utils/mergeCart.js";
 import AppUserService from "../services/appUser.service.js";
 import UserService from "../services/user.service.js";
 import { sendVerificationCode } from "../config/email.js";
-import { logActivity } from "../utils/logger.js";
+import { logActivity, logError, logSecurity } from "../utils/logger.js";
 
 // ✅ SECURE OTP Generator using crypto
 const generateSecureOTP = () => {

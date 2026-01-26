@@ -12,7 +12,7 @@ export const loggingMiddleware = (req, res, next) => {
     res.on("finish", () => {
         const responseTime = Date.now() - start;
         const { method } = req;
-        const path = req.route?.path || req.path || req.url;
+        const path = req.originalUrl || req.url;
         const { statusCode } = res;
         const ip = req.ip || req.connection.remoteAddress;
         const userAgent = req.get("User-Agent");
