@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import UserService from "../services/user.service.js";
 import ProductService from "../services/product.service.js";
+import { logActivity } from "../utils/logger.js";
 
 const { ObjectId } = mongoose.Types;
 
@@ -96,7 +97,7 @@ const addToCart = async (req, res) => {
       return res.status(400).json({ error: true, message: `Size ${size} not available` });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
+    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData email");
     const current = user.cartData[itemId] || { quantity: 0, size: null };
 
     const finalSize = hasSizes ? size : null;
@@ -110,6 +111,20 @@ const addToCart = async (req, res) => {
     }
 
     await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: finalSize });
+
+    // Optimized logging - user email already fetched
+    logActivity({
+      email: user.email,
+      user: userId,
+      role: "User",
+      status: "success",
+      target: itemId,
+      action: "ADD_TO_CART",
+      message: `Added item to cart`,
+      metadata: { quantity: newQty, size: finalSize },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
 
     return res.json({
       success: true,
@@ -140,7 +155,7 @@ const modifyCartQuantity = async (req, res) => {
       return res.status(404).json({ error: true, message: "Product not found" });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
+    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData email");
     const current = user.cartData[itemId];
 
     if (!current || current.quantity <= 0) {
@@ -159,6 +174,19 @@ const modifyCartQuantity = async (req, res) => {
 
       await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size });
 
+      logActivity({
+        email: user.email,
+        user: userId,
+        role: "User",
+        status: "success",
+        target: itemId,
+        action: "INCREASE_CART_QUANTITY",
+        message: `Increased cart quantity`,
+        metadata: { newQuantity: newQty },
+        ip: req.ip,
+        userAgent: req.get("User-Agent")
+      });
+
       return res.json({
         success: true,
         message: "Quantity increased",
@@ -170,11 +198,37 @@ const modifyCartQuantity = async (req, res) => {
     if (action === "decrease") {
       if (current.quantity === 1) {
         await UserService.removeCartItem(userId, itemId);
+
+        logActivity({
+          email: user.email,
+          user: userId,
+          role: "User",
+          status: "success",
+          target: itemId,
+          action: "REMOVE_FROM_CART",
+          message: `Removed item from cart (qty decreased to 0)`,
+          ip: req.ip,
+          userAgent: req.get("User-Agent")
+        });
+
         return res.json({ success: true, message: "Item removed from cart", quantity: 0 });
       }
 
       const newQty = current.quantity - 1;
       await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size });
+
+      logActivity({
+        email: user.email,
+        user: userId,
+        role: "User",
+        status: "success",
+        target: itemId,
+        action: "DECREASE_CART_QUANTITY",
+        message: `Decreased cart quantity`,
+        metadata: { newQuantity: newQty },
+        ip: req.ip,
+        userAgent: req.get("User-Agent")
+      });
 
       return res.json({
         success: true,
@@ -197,7 +251,21 @@ const removeFromCart = async (req, res) => {
       return res.status(400).json({ error: true, message: "itemId required" });
     }
 
+    const user = await UserService.findByAppUserIdWithSelect(userId, "email");
     await UserService.removeCartItem(userId, itemId);
+
+    logActivity({
+      email: user.email,
+      user: userId,
+      role: "User",
+      status: "success",
+      target: itemId,
+      action: "REMOVE_FROM_CART",
+      message: `Removed item from cart`,
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
     res.json({ success: true, message: "Item removed from cart" });
   } catch (err) {
     res.status(500).json({ error: true, message: err.message });

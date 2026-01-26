@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import ProductService from '../services/product.service.js';
 import StockHistoryService from "../services/stockHistory.service.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
+import { logActivity, logError, logApplication } from "../utils/logger.js";
+import AppUser from "../models/AppUser.module.js";
 
 export const getSellerProducts = async (req, res) => {
   try {
@@ -14,6 +16,11 @@ export const getSellerProducts = async (req, res) => {
     const products = await ProductService.findByOwner(sellerId);
     return res.status(200).json({ success: true, products });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Get Seller Products",
+      metadata: { sellerId: req.auth.userId }
+    });
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -34,6 +41,11 @@ export const getSellerProductByID = async (req, res) => {
 
     res.status(200).json({ success: true, product });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Get Seller Product by ID",
+      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -87,8 +99,27 @@ export const addProduct = async (req, res) => {
       });
     }
 
+    const sellerObj = await AppUser.findById(sellerId);
+    logActivity({
+      email: sellerObj?.email,
+      user: sellerId,
+      role: "Seller",
+      status: "success",
+      target: product._id.toString(),
+      action: "ADD_PRODUCT",
+      message: `Product added: ${title}`,
+      metadata: { productId: product._id },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
     res.status(201).json({ success: true, product });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Add Product",
+      metadata: { sellerId: req.auth.userId, title: req.body.title }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -153,10 +184,35 @@ export const updateProduct = async (req, res) => {
         changedBy: sellerId,
         notes: `Stock ${change > 0 ? 'increased' : 'decreased'} by ${Math.abs(change)}`
       });
+
+      logApplication({
+        event: "STOCK_UPDATED",
+        message: `Stock for ${existingProduct.title} updated from ${previousStock} to ${newStock}`,
+        metadata: { productId: id, previousStock, newStock, change }
+      });
     }
+
+    const sellerObj = await AppUser.findById(sellerId);
+    logActivity({
+      email: sellerObj?.email,
+      user: sellerId,
+      role: "Seller",
+      status: "success",
+      target: id,
+      action: "UPDATE_PRODUCT",
+      message: `Product updated: ${updatedProduct.title}`,
+      metadata: { productId: id },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
 
     res.status(200).json({ success: true, product: updatedProduct });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Update Product",
+      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -177,12 +233,31 @@ export const deleteProduct = async (req, res) => {
 
     await StockHistoryService.deleteByProductId(id);
 
+    const sellerObj = await AppUser.findById(sellerId);
+    logActivity({
+      email: sellerObj?.email,
+      user: sellerId,
+      role: "Seller",
+      status: "success",
+      target: id,
+      action: "DELETE_PRODUCT",
+      message: `Product deleted: ${product.title}`,
+      metadata: { productId: id },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
     res.status(200).json({
       success: true,
       message: "Product and its stock history deleted successfully",
       product
     });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Delete Product",
+      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -214,7 +289,25 @@ export const bulkDeleteProducts = async (req, res) => {
       message: `${result.deletedCount} product(s) deleted successfully`,
       deletedCount: result.deletedCount
     });
+
+    logActivity({
+      email: (await AppUser.findById(sellerId).lean())?.email,
+      user: sellerId,
+      role: "Seller",
+      status: "success",
+      action: "BULK_DELETE_PRODUCTS",
+      message: `Bulk deleted ${result.deletedCount} products`,
+      metadata: { productIds },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
   } catch (err) {
+    logError({
+      error: err,
+      context: "Bulk Delete Products",
+      metadata: { sellerId: req.auth.userId, productIds: req.body.productIds }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -255,10 +348,34 @@ export const updateStock = async (req, res) => {
         changedBy: sellerId,
         notes: "Quick stock change from seller stock page"
       });
+
+      logApplication({
+        event: "STOCK_UPDATED",
+        message: `Stock for ${existingProduct.title} updated (quick update) from ${previousStock} to ${newStock}`,
+        metadata: { productId: id, previousStock, newStock, change }
+      });
+
+      logActivity({
+        email: (await AppUser.findById(sellerId).lean())?.email,
+        user: sellerId,
+        role: "Seller",
+        status: "success",
+        target: id,
+        action: "UPDATE_STOCK",
+        message: `Stock updated for product ${id}: ${previousStock} -> ${newStock}`,
+        metadata: { productId: id, change },
+        ip: req.ip,
+        userAgent: req.get("User-Agent")
+      });
     }
 
     res.status(200).json({ success: true, message: "Stock Updated Successfully", product: updatedProduct });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Quick Update Stock",
+      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };

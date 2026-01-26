@@ -1,5 +1,6 @@
 import express from "express";
 import { verifyAuth } from "../middlewares/verifyAuth.js";
+import limiter from "../middlewares/ratelimit.js";
 import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 import { getUserRooms, getSellerRooms, getRoomId, uploadChatImage } from "../controllers/chat.controller.js";
 import chatUpload from "../middlewares/chatUpload.js";
@@ -16,7 +17,7 @@ chatRouter.get("/rooms/seller", verifyAuth, authorizeRoles("seller"), getSellerR
 chatRouter.get("/room-id", verifyAuth, getRoomId);
 
 // Shared: upload image for chat
-chatRouter.post("/upload", verifyAuth, chatUpload.single("image"), uploadChatImage);
+chatRouter.post("/upload", verifyAuth, limiter, chatUpload.single("image"), uploadChatImage);
 
 export default chatRouter;
 

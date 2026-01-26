@@ -3,6 +3,8 @@ import OrderService from "../services/order.service.js";
 import UserService from "../services/user.service.js";
 import ProductService from "../services/product.service.js";
 import StockHistoryService from "../services/stockHistory.service.js";
+import { logActivity, logError } from "../utils/logger.js";
+import AppUser from "../models/AppUser.module.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const currency = 'pkr';
@@ -66,14 +68,28 @@ const placeOrderCOD = async (req, res) => {
                 newStock,
                 change: -item.quantity,
                 type: "remove",
-                reason: "sale",  
-                changedBy: product.owner,  
+                reason: "sale",
+                changedBy: product.owner,
                 orderId: newOrder.orderId,
                 notes: `Stock reduced for COD order ${newOrder.orderId}`
             });
         }
 
         await UserService.clearCart(userId);
+
+        const userObj = await AppUser.findById(userId);
+        logActivity({
+            email: userObj?.email,
+            user: userId,
+            role: "User",
+            status: "success",
+            target: newOrder._id.toString(),
+            action: "PLACE_ORDER_COD",
+            message: `Order ${newOrder.orderId} placed (COD)`,
+            metadata: { orderId: newOrder._id, amount: newOrder.amount },
+            ip: req.ip,
+            userAgent: req.get("User-Agent")
+        });
 
         res.status(200).json({
             success: true,
@@ -82,6 +98,11 @@ const placeOrderCOD = async (req, res) => {
         });
 
     } catch (err) {
+        logError({
+            error: err,
+            context: "Place Order COD",
+            metadata: { userId: req.auth.userId }
+        });
         res.status(500).json({ message: err.message });
     }
 };
@@ -166,9 +187,28 @@ const placeOrderStripe = async (req, res) => {
             mode: 'payment'
         });
 
+        const userObj = await AppUser.findById(userId).lean();
+        logActivity({
+            email: userObj?.email,
+            user: userId,
+            role: "User",
+            status: "pending",
+            target: newOrder._id.toString(),
+            action: "PLACE_ORDER_STRIPE",
+            message: `Stripe checkout session created for Order ${newOrder.orderId}`,
+            metadata: { orderId: newOrder._id, amount: orderTotal, sessionUrl: session.url },
+            ip: req.ip,
+            userAgent: req.get("User-Agent")
+        });
+
         res.status(200).json({ session_url: session.url });
 
     } catch (err) {
+        logError({
+            error: err,
+            context: "Place Order Stripe",
+            metadata: { userId: req.auth.userId }
+        });
         res.status(500).json({ message: err.message });
     }
 };
@@ -212,7 +252,7 @@ const verifyStripe = async (req, res) => {
                     newStock,
                     change: -item.quantity,
                     type: "remove",
-                    reason: "sale",  
+                    reason: "sale",
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock reduced for Stripe order ${order.orderId} (payment confirmed)`
@@ -221,6 +261,20 @@ const verifyStripe = async (req, res) => {
 
             await OrderService.updatePaymentStatus(orderId, true);
             await UserService.clearCart(userId);
+
+            const userObj = await AppUser.findById(userId);
+            logActivity({
+                email: userObj?.email,
+                user: userId,
+                role: "User",
+                status: "success",
+                target: order._id.toString(),
+                action: "ORDER_PAYMENT_SUCCESS",
+                message: `Payment verified for Order ${order.orderId} (Stripe)`,
+                metadata: { orderId: order._id, amount: order.amount },
+                ip: req.ip,
+                userAgent: req.get("User-Agent")
+            });
 
             res.json({
                 success: true,
@@ -235,6 +289,11 @@ const verifyStripe = async (req, res) => {
         }
 
     } catch (err) {
+        logError({
+            error: err,
+            context: "Verify Stripe Payment",
+            metadata: { userId: req.auth.userId, orderId: req.body.orderId }
+        });
         res.status(500).json({ message: err.message });
     }
 };
@@ -293,6 +352,11 @@ const getUserOrders = async (req, res) => {
 
         res.status(200).json({ orders: enrichedOrders });
     } catch (err) {
+        logError({
+            error: err,
+            context: "Get User Orders",
+            metadata: { userId: req.auth.userId }
+        });
         res.status(500).json({ message: err.message });
     }
 };
@@ -333,7 +397,7 @@ const cancelOrder = async (req, res) => {
                     newStock,
                     change: item.quantity,
                     type: "add",
-                    reason: "return", 
+                    reason: "return",
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock restored - Order ${order.orderId} cancelled by customer`
@@ -343,12 +407,31 @@ const cancelOrder = async (req, res) => {
 
         const updatedOrder = await OrderService.updateStatus(order._id, "cancelled");
 
+        const userObj = await AppUser.findById(userId);
+        logActivity({
+            email: userObj?.email,
+            user: userId,
+            role: "User",
+            status: "success",
+            target: order._id.toString(),
+            action: "CANCEL_ORDER",
+            message: `Order ${order.orderId} cancelled by user`,
+            metadata: { orderId: order._id },
+            ip: req.ip,
+            userAgent: req.get("User-Agent")
+        });
+
         res.status(200).json({
             success: true,
             message: "Order cancelled successfully",
             order: updatedOrder
         });
     } catch (err) {
+        logError({
+            error: err,
+            context: "Cancel Order",
+            metadata: { userId: req.auth.userId, orderId: req.body.orderId }
+        });
         res.status(500).json({ message: err.message });
     }
 };

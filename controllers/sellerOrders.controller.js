@@ -2,6 +2,7 @@ import OrderService from "../services/order.service.js";
 import ProductService from "../services/product.service.js";
 import UserService from '../services/user.service.js'
 import AppUserService from "../services/appUser.service.js";
+import { logActivity, logError } from "../utils/logger.js";
 
 export const getSellerOrders = async (req, res) => {
   try {
@@ -33,7 +34,11 @@ export const getSellerOrders = async (req, res) => {
 
     res.status(200).json({ success: true, orders: filteredOrders });
   } catch (error) {
-    console.error("getSellerOrders error:", error.message);
+    logError({
+      error: error,
+      context: "Get Seller Orders",
+      metadata: { sellerId: req.auth.userId }
+    });
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -42,9 +47,9 @@ export const updateOrderStatus = async (req, res) => {
   try {
     const sellerId = req.auth.userId; // AppUser._id
     const { orderId, status } = req.body;
-
     const order = await OrderService.findById(orderId);
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    const oldStatus = order.status;
     if (order.status === "cancelled") return res.status(400).json({ success: false, message: "Cannot update a cancelled order" });
 
     // ✅ Check if user is a seller
@@ -69,8 +74,25 @@ export const updateOrderStatus = async (req, res) => {
       message: "Order status updated successfully",
       order: updatedOrder
     });
+
+    logActivity({
+      email: sellerUser.email,
+      user: sellerId,
+      role: "Seller",
+      status: "success",
+      target: orderId,
+      action: "UPDATE_ORDER_STATUS",
+      message: `Order status updated from ${oldStatus} to ${status}`,
+      metadata: { orderId, oldStatus, newStatus: status },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
   } catch (err) {
-    console.error("updateOrderStatus error:", err.message);
+    logError({
+      error: err,
+      context: "Update Order Status",
+      metadata: { orderId: req.body.orderId, sellerId: req.auth.userId }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };
