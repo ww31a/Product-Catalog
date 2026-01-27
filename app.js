@@ -41,13 +41,10 @@ app.use(
       defaultSrc: ["'self'"],
       imgSrc: ["'self'", "blob:", "data:", "https://res.cloudinary.com"],
       scriptSrc: ["'self'"],
+      workerSrc: ["'self'", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: [
-        "'self'",
-        "ws:",
-        "wss:",
-        "http://localhost:5173"
-      ]
+      connectSrc: ["'self'", "ws:", "wss:", "http://localhost:5173"],
+      objectSrc: ["'self'", "blob:"]
     },
   })
 );

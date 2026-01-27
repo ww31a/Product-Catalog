@@ -1,16 +1,16 @@
 import { Router } from "express";
-import limiter from "../middlewares/ratelimit.js";
-import { userLogin, userRegister, verifyEmail,verifyUserLoginOTP, resendVerificationCode } from "../controllers/userAuth.controller.js";
+import { authLimiter } from "../middlewares/ratelimit.js";
+import { userLogin, userRegister, verifyEmail, verifyUserLoginOTP, resendVerificationCode } from "../controllers/userAuth.controller.js";
 import { validateBody } from "../middlewares/validateBody.js";
-import {signupSchema} from "../utils/JoiValidation.js";
+import { signupSchema } from "../utils/JoiValidation.js";
 
 const userAuthRouter = Router();
 
-userAuthRouter.post('/signup',limiter,validateBody(signupSchema),userRegister)
-userAuthRouter.post('/login',limiter, userLogin)
-userAuthRouter.post('/verify-email',limiter,verifyEmail)
-userAuthRouter.post('/verify-login-otp',limiter,verifyUserLoginOTP)
-userAuthRouter.post('/resend-otp',limiter,resendVerificationCode)
+userAuthRouter.post('/signup', authLimiter, validateBody(signupSchema), userRegister)
+userAuthRouter.post('/login', authLimiter, userLogin)
+userAuthRouter.post('/verify-email', authLimiter, verifyEmail)
+userAuthRouter.post('/verify-login-otp', authLimiter, verifyUserLoginOTP)
+userAuthRouter.post('/resend-otp', authLimiter, resendVerificationCode)
 
 
 export default userAuthRouter;

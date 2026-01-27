@@ -1,5 +1,5 @@
 import { Router } from "express";
-import limiter from "../middlewares/ratelimit.js";
+import { authLimiter } from "../middlewares/ratelimit.js";
 import {
     getAllSellers, deleteSeller, getPlatformOverview, getTopSellers, getAllUsers,
     getAllProducts, getAllOrders,
@@ -15,7 +15,7 @@ const superAdminRouter = Router();
 
 // Protected routes
 superAdminRouter.get("/profile", verifySuperAdmin, getSuperAdminProfile);
-superAdminRouter.put("/change-password", verifySuperAdmin, limiter, validateBody(passwordSchema), changePassword);
+superAdminRouter.put("/change-password", verifySuperAdmin, authLimiter, validateBody(passwordSchema), changePassword);
 
 superAdminRouter.get('/all-sellers', verifySuperAdmin, getAllSellers);
 superAdminRouter.get('/all-users', verifySuperAdmin, getAllUsers);
@@ -28,6 +28,6 @@ superAdminRouter.delete('/delete-seller/:sellerId', verifySuperAdmin, deleteSell
 superAdminRouter.post('/bulk-delete-seller', verifySuperAdmin, bulkDeleteSellers); //not useed
 
 // Public route
-superAdminRouter.post("/login", limiter, superAdminLogin);
+superAdminRouter.post("/login", authLimiter, superAdminLogin);
 
 export default superAdminRouter;

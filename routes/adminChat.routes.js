@@ -1,6 +1,6 @@
 import express from "express";
 import { verifyAuth } from "../middlewares/verifyAuth.js";
-import limiter from "../middlewares/ratelimit.js";
+import { actionLimiter } from "../middlewares/ratelimit.js";
 import { authorizeRoles } from "../middlewares/authorizeRoles.js";
 import {
     getAdminConversations,
@@ -23,13 +23,13 @@ adminChatRouter.get("/conversations", getAdminConversations);
 adminChatRouter.get("/conversations/:conversationId/history", getConversationHistory);
 
 // Start new conversation
-adminChatRouter.post("/conversations", limiter, startConversation);
+adminChatRouter.post("/conversations", actionLimiter, startConversation);
 
 // Close conversation
 adminChatRouter.patch("/conversations/:conversationId/close", closeConversation);
 
 // Upload image for chat
-adminChatRouter.post("/upload", limiter, chatUpload.single("image"), uploadChatImage);
+adminChatRouter.post("/upload", actionLimiter(), chatUpload.single("image"), uploadChatImage);
 
 // Get available participants
 // adminChatRouter.get("/participants", getAvailableParticipants);

@@ -50,8 +50,8 @@ export const getMe = async (req, res) => {
         // Cart count (total quantity)
         const userData = await UserService.findByUserId(userId);
         const cartData = userData?.cartData || {};
-        const totalQty = Object.values(cartData).reduce((acc, item) => acc + (item.quantity || 0), 0);
-        response.cartCount = totalQty;
+        const productCount = Object.keys(cartData).length;
+        response.cartCount = productCount;
 
         // Order count
         const orderCount = await OrderService.countDocuments({ userId });

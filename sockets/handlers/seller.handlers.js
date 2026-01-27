@@ -2,6 +2,9 @@ import chatMessageService from "../../services/chatMessage.service.js";
 import { generateRoomId } from "../rooms.utils.js";
 import { setupSupportHandlers } from "./support.handlers.js";
 
+// Configuration
+const MESSAGE_MAX_LENGTH = 5000; // characters
+
 export const setupSellerHandlers = (socket, io) => {
   const sellerId = socket.user.userId;
 
@@ -32,13 +35,30 @@ export const setupSellerHandlers = (socket, io) => {
         return socket.emit("error_message", { message: "Message, image, or PDF is required" });
       }
 
+      // Message length validation
+      if (message && message.length > MESSAGE_MAX_LENGTH) {
+        return socket.emit("error_message", { 
+          message: `Message too long. Maximum ${MESSAGE_MAX_LENGTH} characters allowed.`
+        });
+      }
+
+      // Trim whitespace
+      const trimmedMessage = message ? message.trim() : null;
+      
+      // Don't allow empty messages (only whitespace)
+      if (message && !trimmedMessage) {
+        return socket.emit("error_message", { 
+          message: "Message cannot be empty" 
+        });
+      }
+
       const chatMessage = await chatMessageService.create({
         roomId,
         userId: targetUserId,
         sellerId,
         senderId: sellerId,
         senderRole: "seller",
-        message: message || null,
+        message: trimmedMessage,
         image: imageUrl || null,
         pdf: pdfUrl || null,
       });

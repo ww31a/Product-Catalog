@@ -126,12 +126,19 @@ const addToCart = async (req, res) => {
       userAgent: req.get("User-Agent")
     });
 
-    return res.json({
+    const response = {
       success: true,
       message: "Item added to cart",
-      quantity: newQty,
-      size: finalSize
-    });
+      quantity: newQty
+    };
+
+    if (finalSize) {
+      response.size = finalSize;
+    }
+
+    return res.json(response);
+
+
   } catch (err) {
     res.status(500).json({ error: true, message: err.message });
   }
@@ -187,12 +194,17 @@ const modifyCartQuantity = async (req, res) => {
         userAgent: req.get("User-Agent")
       });
 
-      return res.json({
+      const response = {
         success: true,
         message: "Quantity increased",
-        quantity: newQty,
-        size: current.size
-      });
+        quantity: newQty
+      };
+
+      if (current.size) {
+        response.size = current.size;
+      }
+
+      return res.json(response);
     }
 
     if (action === "decrease") {
@@ -230,12 +242,17 @@ const modifyCartQuantity = async (req, res) => {
         userAgent: req.get("User-Agent")
       });
 
-      return res.json({
+      const response = {
         success: true,
         message: "Quantity decreased",
-        quantity: newQty,
-        size: current.size
-      });
+        quantity: newQty
+      };
+
+      if (current.size) {
+        response.size = current.size;
+      }
+
+      return res.json(response);
     }
   } catch (err) {
     res.status(500).json({ error: true, message: err.message });
