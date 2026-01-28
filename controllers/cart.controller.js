@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import UserService from "../services/user.service.js";
+import AppUserService from "../services/appUser.service.js";
 import ProductService from "../services/product.service.js";
 import { logActivity } from "../utils/logger.js";
 
@@ -97,7 +98,8 @@ const addToCart = async (req, res) => {
       return res.status(400).json({ error: true, message: `Size ${size} not available` });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData email");
+    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
+    const appUser = await AppUserService.findById(userId);
     const current = user.cartData[itemId] || { quantity: 0, size: null };
 
     const finalSize = hasSizes ? size : null;
@@ -112,9 +114,8 @@ const addToCart = async (req, res) => {
 
     await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: finalSize });
 
-    // Optimized logging - user email already fetched
     logActivity({
-      email: user.email,
+      email: appUser?.email,
       user: userId,
       role: "User",
       status: "success",
@@ -162,7 +163,8 @@ const modifyCartQuantity = async (req, res) => {
       return res.status(404).json({ error: true, message: "Product not found" });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData email");
+    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
+    const appUser = await AppUserService.findById(userId);
     const current = user.cartData[itemId];
 
     if (!current || current.quantity <= 0) {
@@ -182,7 +184,7 @@ const modifyCartQuantity = async (req, res) => {
       await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size });
 
       logActivity({
-        email: user.email,
+        email: appUser?.email,
         user: userId,
         role: "User",
         status: "success",
@@ -212,7 +214,7 @@ const modifyCartQuantity = async (req, res) => {
         await UserService.removeCartItem(userId, itemId);
 
         logActivity({
-          email: user.email,
+          email: appUser?.email,
           user: userId,
           role: "User",
           status: "success",
@@ -230,7 +232,7 @@ const modifyCartQuantity = async (req, res) => {
       await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size });
 
       logActivity({
-        email: user.email,
+        email: appUser?.email,
         user: userId,
         role: "User",
         status: "success",
@@ -268,11 +270,11 @@ const removeFromCart = async (req, res) => {
       return res.status(400).json({ error: true, message: "itemId required" });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "email");
+    const appUser = await AppUserService.findById(userId);
     await UserService.removeCartItem(userId, itemId);
 
     logActivity({
-      email: user.email,
+      email: appUser?.email,
       user: userId,
       role: "User",
       status: "success",

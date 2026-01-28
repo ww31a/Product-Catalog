@@ -98,7 +98,7 @@ class OrderService {
 
   async getTotalRevenue(filter = {}) {
     const result = await Order.aggregate([
-      { $match: { payment: true, ...filter } },
+      { $match: { payment: true, status: { $ne: 'cancelled' }, ...filter } },
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
     return result[0]?.total || 0;
@@ -176,7 +176,7 @@ class OrderService {
 
   async getRevenueStats() {
     const result = await Order.aggregate([
-      { $match: { payment: true } },
+      { $match: { payment: true, status: { $ne: 'cancelled' } } },
       {
         $group: {
           _id: null,
