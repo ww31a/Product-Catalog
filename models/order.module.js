@@ -21,6 +21,9 @@ const orderSchema = new mongoose.Schema({
     date: { type: Number, required:true }
 }, { timestamps: true })
 
+orderSchema.index({ userId: 1 }); // Find all orders by user
+orderSchema.index({ date: -1 }); // Sort by most recent orders
+
 
 const Order = mongoose.model("Order", orderSchema);
 export default Order;

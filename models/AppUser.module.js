@@ -47,5 +47,7 @@ const appUserSchema = new mongoose.Schema(
     { timestamps: true, minimize: false }
 );
 
+appUserSchema.index({ roles: 1 }); // If you query by role
+
 const AppUser = mongoose.model("AppUser", appUserSchema);
 export default AppUser;

@@ -87,7 +87,7 @@ export const addProduct = async (req, res) => {
 
     // Initial stock history
     if (product.stock > 0) {
-      await StockHistoryService.create({
+      StockHistoryService.create({
         productId: product._id,
         previousStock: 0,
         newStock: product.stock,
@@ -99,19 +99,22 @@ export const addProduct = async (req, res) => {
       });
     }
 
-    const sellerObj = await AppUser.findById(sellerId);
-    logActivity({
-      email: sellerObj?.email,
-      user: sellerId,
-      role: "Seller",
-      status: "success",
-      target: product._id.toString(),
-      action: "ADD_PRODUCT",
-      message: `Product added: ${title}`,
-      metadata: { productId: product._id },
-      ip: req.ip,
-      userAgent: req.get("User-Agent")
-    });
+    AppUser.findById(sellerId)
+      .then(sellerObj => {
+        logActivity({
+          email: sellerObj?.email,
+          user: sellerId,
+          role: "Seller",
+          status: "success",
+          target: product._id.toString(),
+          action: "ADD_PRODUCT",
+          message: `Product added: ${title}`,
+          metadata: { productId: product._id },
+          ip: req.ip,
+          userAgent: req.get("User-Agent")
+        });
+      })
+      .catch(err => console.error("Activity log error:", err));
 
     res.status(201).json({ success: true, product });
   } catch (err) {

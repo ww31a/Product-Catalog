@@ -42,5 +42,8 @@ const productSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+productSchema.index({ owner: 1 }); // For seller queries (find all products by seller)
+
+
 const Product = mongoose.model("Product", productSchema);
 export default Product;

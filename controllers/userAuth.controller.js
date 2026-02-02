@@ -190,7 +190,7 @@ export const userLogin = async (req, res) => {
 
     // Merge guest cart
     if (Array.isArray(guestCart) && guestCart.length > 0) {
-      await mergeGuestCartIntoUserCart(user._id, guestCart);
+      mergeGuestCartIntoUserCart(user._id, guestCart);
     }
 
     // Generate LOGIN_2FA OTP
@@ -200,7 +200,7 @@ export const userLogin = async (req, res) => {
     user.verificationCodeExpiresAt = getOTPExpiryTime();
     await user.save();
 
-    await sendVerificationCode(email, otp);
+    sendVerificationCode(email, otp);
 
     return res.status(200).json({
       success: true,

@@ -195,7 +195,7 @@ export const sellerLogin = async (req, res) => {
     seller.verificationCodeExpiresAt = getOTPExpiryTime();
     await seller.save();
 
-    await sendVerificationCode(email, otp);
+    sendVerificationCode(email, otp);  //removed await so its asynchronous
 
     return res.status(200).json({
       success: true,
