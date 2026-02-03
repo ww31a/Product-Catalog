@@ -13,23 +13,25 @@ import { passwordSchema } from "../utils/JoiValidation.js";
 
 import { withLogging } from "../middlewares/withLogging.js";
 
+
+
 const superAdminRouter = Router();
 
 // Protected routes
-superAdminRouter.get("/profile", verifySuperAdmin, withLogging('SUPERADMIN_PROFILE', getSuperAdminProfile));
-superAdminRouter.put("/change-password", verifySuperAdmin, authLimiter, validateBody(passwordSchema), withLogging('SUPERADMIN_CHANGE_PASSWORD', changePassword));
+superAdminRouter.get("/profile", withLogging('AuthSuper', verifySuperAdmin), getSuperAdminProfile);
+superAdminRouter.put("/change-password", withLogging('AuthSuper', verifySuperAdmin), authLimiter, withLogging('Validation', validateBody(passwordSchema)), changePassword);
 
-superAdminRouter.get('/all-sellers', verifySuperAdmin, withLogging('SUPERADMIN_LIST_SELLERS', getAllSellers));
-superAdminRouter.get('/all-users', verifySuperAdmin, withLogging('SUPERADMIN_LIST_USERS', getAllUsers));
-superAdminRouter.get('/all-products', verifySuperAdmin, withLogging('SUPERADMIN_LIST_PRODUCTS', getAllProducts));
-superAdminRouter.get('/all-orders', verifySuperAdmin, withLogging('SUPERADMIN_LIST_ORDERS', getAllOrders));
-superAdminRouter.get('/overview', verifySuperAdmin, withLogging('SUPERADMIN_OVERVIEW', getPlatformOverview));
-superAdminRouter.get('/top-sellers', verifySuperAdmin, withLogging('SUPERADMIN_TOP_SELLERS', getTopSellers)); //not used
+superAdminRouter.get('/all-sellers', withLogging('AuthSuper', verifySuperAdmin), getAllSellers);
+superAdminRouter.get('/all-users', withLogging('AuthSuper', verifySuperAdmin), getAllUsers);
+superAdminRouter.get('/all-products', withLogging('AuthSuper', verifySuperAdmin), getAllProducts);
+superAdminRouter.get('/all-orders', withLogging('AuthSuper', verifySuperAdmin), getAllOrders);
+superAdminRouter.get('/overview', withLogging('AuthSuper', verifySuperAdmin), getPlatformOverview);
+superAdminRouter.get('/top-sellers', withLogging('AuthSuper', verifySuperAdmin), getTopSellers); //not used
 
-superAdminRouter.delete('/delete-seller/:sellerId', verifySuperAdmin, withLogging('SUPERADMIN_DELETE_SELLER', deleteSeller)); //not used
-superAdminRouter.post('/bulk-delete-seller', verifySuperAdmin, withLogging('SUPERADMIN_BULK_DELETE_SELLER', bulkDeleteSellers)); //not useed
+superAdminRouter.delete('/delete-seller/:sellerId', withLogging('AuthSuper', verifySuperAdmin), deleteSeller); //not used
+superAdminRouter.post('/bulk-delete-seller', withLogging('AuthSuper', verifySuperAdmin), bulkDeleteSellers); //not useed
 
 // Public route
-superAdminRouter.post("/login", authLimiter, withLogging('SUPERADMIN_LOGIN', superAdminLogin));
+superAdminRouter.post("/login", authLimiter, superAdminLogin);
 
 export default superAdminRouter;
