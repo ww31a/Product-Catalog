@@ -11,6 +11,7 @@ export const withLogging = (name, middleware) => {
         try {
             await middleware(req, res, (err) => {
                 const duration = Date.now() - start;
+                const userId = req.auth?.userId || req.user?.id;
 
                 if (err) {
                     logSecurity({
@@ -19,7 +20,7 @@ export const withLogging = (name, middleware) => {
                         metadata: {
                             requestId: req.requestId,
                             duration,
-                            userId: req.user?.id || req.auth?.userId,
+                            userId,
                             path: req.originalUrl,
                             method: req.method
                         }
@@ -31,7 +32,7 @@ export const withLogging = (name, middleware) => {
                         metadata: {
                             requestId: req.requestId,
                             duration,
-                            userId: req.user?.id || req.auth?.userId
+                            userId
                         }
                     });
                 }
@@ -44,7 +45,7 @@ export const withLogging = (name, middleware) => {
                 message: `${name} crashed: ${error.message}`,
                 metadata: {
                     requestId: req.requestId,
-                    userId: req.user?.id || req.auth?.userId
+                    userId: req.auth?.userId || req.user?.id
                 }
             });
             next(error);

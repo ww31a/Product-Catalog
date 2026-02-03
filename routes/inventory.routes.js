@@ -19,6 +19,9 @@ const inventoryRouter = express.Router();
 
 // inventoryRouter.get('/history', getAllHistory);
 
+// inventoryRouter.get('/report/value',getTotalInventoryValue);
+
+
 //inventory Reports endpoints
 inventoryRouter.get('/reports/low-stock',verifyAuth, authorizeRoles("seller"),getLowStockAlert);
 
@@ -26,7 +29,6 @@ inventoryRouter.get('/reports/out-of-stock',verifyAuth, authorizeRoles("seller")
 
 inventoryRouter.get('/reports/in-stock',verifyAuth, authorizeRoles("seller"),getInStockAlert);
 
-// inventoryRouter.get('/report/value',getTotalInventoryValue);
 
 //stock change summary
 inventoryRouter.get('/reports/summary',verifyAuth, authorizeRoles("seller"),getStockSummary);

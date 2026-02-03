@@ -223,6 +223,7 @@ export const logActivity = ({
 /**
  * Log HTTP access (request/response)
  * These go to access.log file only
+ * Enhanced with actor info for public API tracking
  */
 export const logAccess = ({
     method,
@@ -232,7 +233,8 @@ export const logAccess = ({
     requestId,
     ip,
     userAgent,
-    userId = null,
+    actorType = null,   // "ANON" | "USER"
+    userId = null,      // actual userId or anonymized identifier
 }) => {
     accessLogger.info(`${method} ${path} ${statusCode} ${responseTime}ms`, {
         method,
@@ -242,6 +244,7 @@ export const logAccess = ({
         requestId,
         ip,
         userAgent,
+        actorType,
         userId,
     });
 };
