@@ -25,14 +25,44 @@ import { loggingMiddleware } from './middlewares/logging.middleware.js';
 import { uploadLogsCronJob } from './utils/uploadLogsToCloudinary.js';
 import { logSystem, logError } from './utils/logger.js';
 import meRouter from './routes/me.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
+// Global Crash Handlers - Must be registered early
+process.on('uncaughtException', (error) => {
+  logError({
+    error,
+    context: "Uncaught Exception - CRITICAL",
+    metadata: { type: "PROCESS_CRASH" }
+  });
+  logSystem({
+    event: "CRITICAL_ERROR",
+    message: `Uncaught Exception detected: ${error.message}`,
+    metadata: { stack: error.stack }
+  });
+  console.error("CRITICAL ERROR: Uncaught Exception. Exiting...", error);
+  process.exit(1); // Exit with failure to allow restart by PM2/Docker
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logError({
+    error: reason instanceof Error ? reason : new Error(String(reason)),
+    context: "Unhandled Rejection",
+    metadata: { type: "PROMISE_REJECTION" }
+  });
+  logSystem({
+    event: "UNHANDLED_REJECTION",
+    message: `Unhandled Rejection detected: ${reason instanceof Error ? reason.message : reason}`
+  });
+  console.error("Unhandled Rejection:", reason);
+});
 
 const app = express();
+
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Apply logging middleware FIRST
 app.use(loggingMiddleware);
 
 app.use(
@@ -70,6 +100,9 @@ app.use('/api/admin/chat', adminChatRouter)
 app.use('/api/chat', chatRouter)
 app.use('/api/activity', activityRouter)
 
+// Global error handler - MUST be after all routes
+app.use(errorHandler);
+
 // Serve React frontend in production
 if (process.env.NODE_ENV === "production") {
   const distPath = join(__dirname, "frontend", "dist");
@@ -82,22 +115,18 @@ if (process.env.NODE_ENV === "production") {
 
 const startServer = async () => {
   try {
-    // Log system startup attempt
     logSystem({
       event: "SERVER_START",
-      message: `Server starting on port ${PORT}`,
-      metadata: { port: PORT, env: process.env.NODE_ENV }
+      message: `Server starting on port ${PORT}`
     });
 
     await connectDB();
 
-    // Log DB connection success
     logSystem({
       event: "DATABASE_CONNECTED",
-      message: "MongoDB connection established"
+      message: "MongoDB connected"
     });
 
-    // Start cron job for log uploads
     uploadLogsCronJob();
 
     const httpServer = http.createServer(app);
@@ -115,22 +144,18 @@ const startServer = async () => {
     httpServer.listen(PORT, "0.0.0.0", () => {
       logSystem({
         event: "SERVER_READY",
-        message: `Server running on port ${PORT}`,
-        metadata: { port: PORT }
+        message: `Server running on port ${PORT}`
       });
       console.log(`Server running on http://localhost:${PORT}`);
     });
   } catch (err) {
     logError({
       error: err,
-      context: "Server Startup",
-      metadata: { port: PORT }
+      context: "Server Startup"
     });
-    console.error("Startup failed", err);
+    console.error("Startup failed:", err);
+    process.exit(1); // Exit if startup fails
   }
 };
 
 startServer();
-
-
-

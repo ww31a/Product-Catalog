@@ -4,6 +4,7 @@ import UserService from "../services/user.service.js";
 import ProductService from "../services/product.service.js";
 import StockHistoryService from "../services/stockHistory.service.js";
 import { logActivity, logError } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 import AppUser from "../models/AppUser.module.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -19,7 +20,7 @@ const placeOrderCOD = async (req, res) => {
         // Validate stock availability and enrich items with sellerId
         const enrichedItems = [];
         for (const item of items) {
-            const product = await ProductService.findById(item._id);
+            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${item.title}` });
             }
@@ -44,14 +45,14 @@ const placeOrderCOD = async (req, res) => {
             date: Date.now()
         };
 
-        const newOrder = await OrderService.create(orderData);
+        const newOrder = await logQuery(req, 'OrderService.create', () => OrderService.create(orderData));
 
         // Process stock reduction and history
         for (const item of enrichedItems) {
-            const product = await ProductService.findById(item._id);
+            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
 
             if (!product || product.stock < item.quantity) {
-                await OrderService.delete(newOrder._id);
+                await logQuery(req, `OrderService.delete(${newOrder._id})`, () => OrderService.delete(newOrder._id));
                 return res.status(400).json({
                     success: false,
                     message: `Not enough stock for product: ${product?.title || item._id}`,
@@ -59,10 +60,10 @@ const placeOrderCOD = async (req, res) => {
             }
 
             const previousStock = product.stock;
-            await ProductService.decrementStock(product._id, item.quantity);
+            await logQuery(req, `Product.decrementStock(${product._id})`, () => ProductService.decrementStock(product._id, item.quantity));
             const newStock = previousStock - item.quantity;
 
-            await StockHistoryService.create({
+            await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
                 productId: product._id,
                 previousStock,
                 newStock,
@@ -72,12 +73,12 @@ const placeOrderCOD = async (req, res) => {
                 changedBy: product.owner,
                 orderId: newOrder.orderId,
                 notes: `Stock reduced for COD order ${newOrder.orderId}`
-            });
+            }));
         }
 
-        await UserService.clearCart(userId);
+        await logQuery(req, 'UserService.clearCart', () => UserService.clearCart(userId));
 
-        const userObj = await AppUser.findById(userId);
+        const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId));
         logActivity({
             email: userObj?.email,
             user: userId,
@@ -86,7 +87,7 @@ const placeOrderCOD = async (req, res) => {
             target: newOrder._id.toString(),
             action: "PLACE_ORDER_COD",
             message: `Order ${newOrder.orderId} placed (COD)`,
-            metadata: { orderId: newOrder._id, amount: newOrder.amount },
+            metadata: { orderId: newOrder._id, amount: newOrder.amount, requestId: req.requestId },
             ip: req.ip,
             userAgent: req.get("User-Agent")
         });
@@ -94,16 +95,21 @@ const placeOrderCOD = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Order placed successfully",
-            orderId: newOrder._id
+            orderId: newOrder._id,
+            requestId: req.requestId
         });
 
     } catch (err) {
         logError({
             error: err,
             context: "Place Order COD",
-            metadata: { userId: req.auth.userId }
+            metadata: { userId: req.auth.userId, requestId: req.requestId }
         });
-        res.status(500).json({ message: err.message });
+        res.status(500).json({
+            error: true,
+            message: "Failed to place order",
+            requestId: req.requestId
+        });
     }
 };
 
@@ -116,12 +122,12 @@ const placeOrderStripe = async (req, res) => {
         // Validate stock availability and enrich items with sellerId
         const enrichedItems = [];
         for (const item of items) {
-            const product = await ProductService.findById(item._id);
+            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
             if (!product) {
-                return res.status(404).json({ message: `Product not found: ${item.title}` });
+                return res.status(404).json({ message: `Product not found: ${item.title}`, requestId: req.requestId });
             }
             if (product.stock < item.quantity) {
-                return res.status(400).json({ message: `Not enough stock for ${product.title}` });
+                return res.status(400).json({ message: `Not enough stock for ${product.title}`, requestId: req.requestId });
             }
 
             enrichedItems.push({
@@ -144,7 +150,7 @@ const placeOrderStripe = async (req, res) => {
             date: Date.now()
         };
 
-        const newOrder = await OrderService.create(orderData);
+        const newOrder = await logQuery(req, 'OrderService.create', () => OrderService.create(orderData));
 
         // Build Stripe line items
         const line_items = enrichedItems.map((item) => ({
@@ -187,7 +193,7 @@ const placeOrderStripe = async (req, res) => {
             mode: 'payment'
         });
 
-        const userObj = await AppUser.findById(userId).lean();
+        const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId).lean());
         logActivity({
             email: userObj?.email,
             user: userId,
@@ -196,20 +202,20 @@ const placeOrderStripe = async (req, res) => {
             target: newOrder._id.toString(),
             action: "PLACE_ORDER_STRIPE",
             message: `Stripe checkout session created for Order ${newOrder.orderId}`,
-            metadata: { orderId: newOrder._id, amount: orderTotal, sessionUrl: session.url },
+            metadata: { orderId: newOrder._id, amount: orderTotal, sessionUrl: session.url, requestId: req.requestId },
             ip: req.ip,
             userAgent: req.get("User-Agent")
         });
 
-        res.status(200).json({ session_url: session.url });
+        res.status(200).json({ session_url: session.url, requestId: req.requestId });
 
     } catch (err) {
         logError({
             error: err,
             context: "Place Order Stripe",
-            metadata: { userId: req.auth.userId }
+            metadata: { userId: req.auth.userId, requestId: req.requestId }
         });
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ error: true, message: "Failed to initiate Stripe payment", requestId: req.requestId });
     }
 };
 
@@ -218,35 +224,37 @@ const verifyStripe = async (req, res) => {
     const { success, orderId } = req.body;
 
     try {
-        const order = await OrderService.findById(orderId);
+        const order = await logQuery(req, `OrderService.findById(${orderId})`, () => OrderService.findById(orderId));
         if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
+            return res.status(404).json({ message: 'Order not found', requestId: req.requestId });
         }
 
         if (success === "true" || success === true) {
             // Process stock reduction
             for (const item of order.items) {
-                const product = await ProductService.findById(item._id);
+                const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
 
                 if (!product) {
-                    await OrderService.delete(orderId);
+                    await logQuery(req, `OrderService.delete(${orderId})`, () => OrderService.delete(orderId));
                     return res.status(404).json({
-                        message: `Product not found: ${item.title}`
+                        message: `Product not found: ${item.title}`,
+                        requestId: req.requestId
                     });
                 }
 
                 if (product.stock < item.quantity) {
-                    await OrderService.delete(orderId);
+                    await logQuery(req, `OrderService.delete(${orderId})`, () => OrderService.delete(orderId));
                     return res.status(400).json({
-                        message: `Not enough stock for ${product.title}`
+                        message: `Not enough stock for ${product.title}`,
+                        requestId: req.requestId
                     });
                 }
 
                 const previousStock = product.stock;
-                await ProductService.decrementStock(product._id, item.quantity);
+                await logQuery(req, `Product.decrementStock(${product._id})`, () => ProductService.decrementStock(product._id, item.quantity));
                 const newStock = previousStock - item.quantity;
 
-                await StockHistoryService.create({
+                await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
                     productId: product._id,
                     previousStock,
                     newStock,
@@ -256,13 +264,13 @@ const verifyStripe = async (req, res) => {
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock reduced for Stripe order ${order.orderId} (payment confirmed)`
-                });
+                }));
             }
 
-            await OrderService.updatePaymentStatus(orderId, true);
-            await UserService.clearCart(userId);
+            await logQuery(req, `OrderService.updatePaymentStatus(${orderId})`, () => OrderService.updatePaymentStatus(orderId, true));
+            await logQuery(req, 'UserService.clearCart', () => UserService.clearCart(userId));
 
-            const userObj = await AppUser.findById(userId);
+            const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId));
             logActivity({
                 email: userObj?.email,
                 user: userId,
@@ -271,20 +279,22 @@ const verifyStripe = async (req, res) => {
                 target: order._id.toString(),
                 action: "ORDER_PAYMENT_SUCCESS",
                 message: `Payment verified for Order ${order.orderId} (Stripe)`,
-                metadata: { orderId: order._id, amount: order.amount },
+                metadata: { orderId: order._id, amount: order.amount, requestId: req.requestId },
                 ip: req.ip,
                 userAgent: req.get("User-Agent")
             });
 
             res.json({
                 success: true,
-                message: 'Payment verified successfully'
+                message: 'Payment verified successfully',
+                requestId: req.requestId
             });
         } else {
-            await OrderService.delete(orderId);
+            await logQuery(req, `OrderService.delete(${orderId})`, () => OrderService.delete(orderId));
             res.json({
                 success: false,
-                message: 'Payment cancelled or failed'
+                message: 'Payment cancelled or failed',
+                requestId: req.requestId
             });
         }
 
@@ -292,9 +302,9 @@ const verifyStripe = async (req, res) => {
         logError({
             error: err,
             context: "Verify Stripe Payment",
-            metadata: { userId: req.auth.userId, orderId: req.body.orderId }
+            metadata: { userId: req.auth.userId, orderId: req.body.orderId, requestId: req.requestId }
         });
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ error: true, message: "Failed to verify payment", requestId: req.requestId });
     }
 };
 
@@ -302,10 +312,10 @@ const getUserOrders = async (req, res) => {
     try {
         const userId = req.auth.userId;
 
-        const orders = await OrderService.findAll({
+        const orders = await logQuery(req, 'OrderService.findAll', () => OrderService.findAll({
             userId,
             $or: [{ paymentMethod: "COD" }, { payment: true }]
-        });
+        }));
 
         // Ensure each item has sellerId (for older orders created before this field was stored)
         const productOwnerCache = new Map();
@@ -331,7 +341,7 @@ const getUserOrders = async (req, res) => {
                 let ownerId = productOwnerCache.get(productId);
 
                 if (!ownerId) {
-                    const product = await ProductService.findById(productId);
+                    const product = await logQuery(req, `Product.findById(${productId})`, () => ProductService.findById(productId));
                     if (product) {
                         ownerId = product.owner?.toString() || product.owner;
                         productOwnerCache.set(productId, ownerId);
@@ -350,14 +360,14 @@ const getUserOrders = async (req, res) => {
             });
         }
 
-        res.status(200).json({ orders: enrichedOrders });
+        res.status(200).json({ orders: enrichedOrders, requestId: req.requestId });
     } catch (err) {
         logError({
             error: err,
             context: "Get User Orders",
-            metadata: { userId: req.auth.userId }
+            metadata: { userId: req.auth.userId, requestId: req.requestId }
         });
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ error: true, message: "Failed to retrieve orders", requestId: req.requestId });
     }
 };
 
@@ -366,32 +376,33 @@ const cancelOrder = async (req, res) => {
         const userId = req.auth.userId;
         const { orderId } = req.body;
 
-        const order = await OrderService.findById(orderId);
+        const order = await logQuery(req, `OrderService.findById(${orderId})`, () => OrderService.findById(orderId));
 
         if (!order) {
-            return res.status(404).json({ message: "Order not found" });
+            return res.status(404).json({ message: "Order not found", requestId: req.requestId });
         }
 
         if (order.userId.toString() !== userId) {
-            return res.status(403).json({ message: "Unauthorized to cancel this order" });
+            return res.status(403).json({ message: "Unauthorized to cancel this order", requestId: req.requestId });
         }
 
         if (order.status !== "pending") {
             return res.status(400).json({
-                message: `Cannot cancel order with status: ${order.status}`
+                message: `Cannot cancel order with status: ${order.status}`,
+                requestId: req.requestId
             });
         }
 
         // Restore stock
         for (const item of order.items) {
-            const product = await ProductService.findById(item._id);
+            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
 
             if (product) {
                 const previousStock = product.stock;
-                await ProductService.incrementStock(product._id, item.quantity);
+                await logQuery(req, `Product.incrementStock(${product._id})`, () => ProductService.incrementStock(product._id, item.quantity));
                 const newStock = previousStock + item.quantity;
 
-                await StockHistoryService.create({
+                await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
                     productId: product._id,
                     previousStock,
                     newStock,
@@ -401,13 +412,13 @@ const cancelOrder = async (req, res) => {
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock restored - Order ${order.orderId} cancelled by customer`
-                });
+                }));
             }
         }
 
-        const updatedOrder = await OrderService.updateStatus(order._id, "cancelled");
+        const updatedOrder = await logQuery(req, `OrderService.updateStatus(${order._id})`, () => OrderService.updateStatus(order._id, "cancelled"));
 
-        const userObj = await AppUser.findById(userId);
+        const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId));
         logActivity({
             email: userObj?.email,
             user: userId,
@@ -416,7 +427,7 @@ const cancelOrder = async (req, res) => {
             target: order._id.toString(),
             action: "CANCEL_ORDER",
             message: `Order ${order.orderId} cancelled by user`,
-            metadata: { orderId: order._id },
+            metadata: { orderId: order._id, requestId: req.requestId },
             ip: req.ip,
             userAgent: req.get("User-Agent")
         });
@@ -424,15 +435,16 @@ const cancelOrder = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Order cancelled successfully",
-            order: updatedOrder
+            order: updatedOrder,
+            requestId: req.requestId
         });
     } catch (err) {
         logError({
             error: err,
             context: "Cancel Order",
-            metadata: { userId: req.auth.userId, orderId: req.body.orderId }
+            metadata: { userId: req.auth.userId, orderId: req.body.orderId, requestId: req.requestId }
         });
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ error: true, message: "Failed to cancel order", requestId: req.requestId });
     }
 };
 

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import SuperAdminManagementService from "../services/superAdminManage.service.js";
-import { logActivity } from "../utils/logger.js";
+import { logActivity, logError } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 import SuperAdmin from "../models/superAdmin.module.js";
 
 export const getAllSellers = async (req, res) => {
@@ -16,13 +17,18 @@ export const getAllSellers = async (req, res) => {
             ];
         }
 
-        const data = await SuperAdminManagementService.getAllSellers(query, page, limit);
+        const data = await logQuery(req, 'SuperAdminManagementService.getAllSellers', () => SuperAdminManagementService.getAllSellers(query, page, limit));
 
         res.json({
             success: true,
             data
         });
     } catch (error) {
+        logError({
+            error,
+            context: "Get All Sellers",
+            metadata: { adminId: req.user.id, requestId: req.requestId }
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -38,7 +44,7 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
-        const seller = await SuperAdminManagementService.deleteSeller(sellerId);
+        const seller = await logQuery(req, `SuperAdminManagementService.deleteSeller(${sellerId})`, () => SuperAdminManagementService.deleteSeller(sellerId));
         if (!seller) {
             return res.status(404).json({
                 success: false,
@@ -46,7 +52,7 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
-        const admin = await SuperAdmin.findById(req.user.id);
+        const admin = await logQuery(req, 'SuperAdmin.findById', () => SuperAdmin.findById(req.user.id));
         logActivity({
             email: admin?.email,
             user: req.user.id,
@@ -56,7 +62,8 @@ export const deleteSeller = async (req, res) => {
             action: "DELETE_SELLER",
             message: `Admin deleted seller: ${sellerId}`,
             ip: req.ip,
-            userAgent: req.get("User-Agent")
+            userAgent: req.get("User-Agent"),
+            metadata: { requestId: req.requestId }
         });
 
         res.json({
@@ -64,6 +71,11 @@ export const deleteSeller = async (req, res) => {
             message: "Seller and associated data deleted successfully"
         });
     } catch (error) {
+        logError({
+            error,
+            context: "Delete Seller",
+            metadata: { sellerId: req.params.sellerId, adminId: req.user.id, requestId: req.requestId }
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };

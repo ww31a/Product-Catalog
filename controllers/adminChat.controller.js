@@ -2,6 +2,8 @@ import sharp from "sharp";
 import AdminChatService from "../services/adminChat.service.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 import cloudinary from "../config/cloudinary.js";
+import { logActivity, logError } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 
 export const getAdminConversations = async (req, res) => {
   try {
@@ -49,9 +51,28 @@ export const startConversation = async (req, res) => {
 export const closeConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const conversation = await AdminChatService.closeConversation(conversationId);
+    const conversation = await logQuery(req, `AdminChatService.closeConversation(${conversationId})`, () => AdminChatService.closeConversation(conversationId));
+
+    logActivity({
+      email: req.auth.email,
+      user: req.auth.userId,
+      role: "Admin",
+      status: "success",
+      target: conversationId,
+      action: "CLOSE_CONVERSATION",
+      message: `Admin closed conversation: ${conversationId}`,
+      metadata: { conversationId, requestId: req.requestId },
+      ip: req.ip,
+      userAgent: req.get("User-Agent")
+    });
+
     res.json({ success: true, conversation });
   } catch (error) {
+    logError({
+      error,
+      context: "Admin Close Conversation",
+      metadata: { conversationId: req.params.conversationId, adminId: req.auth.userId, requestId: req.requestId }
+    });
     res.status(500).json({ success: false, message: error.message });
   }
 };

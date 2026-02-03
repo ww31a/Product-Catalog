@@ -1,33 +1,58 @@
 import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 import { logAccess } from "../utils/logger.js";
 
+// Helper to simplify User-Agent
+const parseUserAgent = (ua) => {
+  if (!ua) return "unknown";
+  if (ua.includes("Firefox")) return "Firefox";
+  if (ua.includes("Edg")) return "Edge";
+  if (ua.includes("Chrome")) return "Chrome";
+  if (ua.includes("Safari")) return "Safari";
+  if (ua.includes("Postman")) return "Postman";
+  return "Other";
+};
+
 export const loggingMiddleware = (req, res, next) => {
-    const start = Date.now();
-    const requestId = req.headers["x-request-id"] || uuidv4();
-    req.requestId = requestId;
+  const start = process.hrtime.bigint();
+  const requestId = uuidv4();
 
-    // Add x-request-id to response headers
-    res.setHeader("x-request-id", requestId);
+  req.requestId = requestId;
+  res.setHeader("x-request-id", requestId);
 
-    res.on("finish", () => {
-        const responseTime = Date.now() - start;
-        const { method } = req;
-        const path = req.originalUrl || req.url;
-        const { statusCode } = res;
-        const ip = req.ip || req.connection.remoteAddress;
-        const userAgent = req.get("User-Agent");
+  res.on("finish", () => {
+    const durationMs =
+      Number(process.hrtime.bigint() - start) / 1e6;
 
-        // Use dedicated access logger (goes to access.log only, not DB)
-        logAccess({
-            method,
-            path,
-            statusCode,
-            responseTime,
-            requestId,
-            ip,
-            userAgent,
-        });
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "unknown";
+
+    // Determine actor type and ID
+    const isAuthenticated = !!req.auth?.userId;
+    const actorType = isAuthenticated ? "USER" : "ANON";
+
+    // Unified userId: actual ID if logged in, hash if ANON
+    const userId = isAuthenticated
+      ? req.auth.userId
+      : crypto.createHash("sha256")
+        .update(ip + (req.get("user-agent") || ""))
+        .digest("hex")
+        .substring(0, 12);
+
+    logAccess({
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      statusCode: res.statusCode,
+      responseTime: Math.round(durationMs),
+      ip,
+      userAgent: parseUserAgent(req.get("user-agent")),
+      actorType,
+      userId
     });
+  });
 
-    next();
+  next();
 };

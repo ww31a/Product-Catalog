@@ -3,17 +3,18 @@ import ProductService from "../services/product.service.js";
 import UserService from '../services/user.service.js'
 import AppUserService from "../services/appUser.service.js";
 import { logActivity, logError } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 
 export const getSellerOrders = async (req, res) => {
   try {
     const sellerId = req.auth.userId;
 
     // Step 1: Get product IDs owned by this seller
-    const products = await ProductService.findByOwnerWithSelect(sellerId, "_id");
+    const products = await logQuery(req, 'ProductService.findByOwnerWithSelect', () => ProductService.findByOwnerWithSelect(sellerId, "_id"));
     const ownedIds = products.map(p => p._id.toString());
 
     // Step 2: Fetch all orders containing any seller's products
-    const orders = await OrderService.findOrdersContainingProducts(ownedIds);
+    const orders = await logQuery(req, 'OrderService.findOrdersContainingProducts', () => OrderService.findOrdersContainingProducts(ownedIds));
 
     // Step 3: Filter items + recalculate amount for seller's products only
     const filteredOrders = orders.map(order => {
@@ -37,7 +38,7 @@ export const getSellerOrders = async (req, res) => {
     logError({
       error: error,
       context: "Get Seller Orders",
-      metadata: { sellerId: req.auth.userId }
+      metadata: { sellerId: req.auth.userId, requestId: req.requestId }
     });
     res.status(500).json({ success: false, message: "Server error" });
   }
@@ -47,19 +48,19 @@ export const updateOrderStatus = async (req, res) => {
   try {
     const sellerId = req.auth.userId; // AppUser._id
     const { orderId, status } = req.body;
-    const order = await OrderService.findById(orderId);
+    const order = await logQuery(req, `OrderService.findById(${orderId})`, () => OrderService.findById(orderId));
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     const oldStatus = order.status;
     if (order.status === "cancelled") return res.status(400).json({ success: false, message: "Cannot update a cancelled order" });
 
     // ✅ Check if user is a seller
-    const sellerUser = await AppUserService.findById(sellerId);
+    const sellerUser = await logQuery(req, 'AppUserService.findById', () => AppUserService.findById(sellerId));
     if (!sellerUser || !sellerUser.roles.includes("seller")) {
       return res.status(403).json({ success: false, message: "Not a seller" });
     }
 
     // ✅ Get all products owned by this seller
-    const sellerProducts = await ProductService.findByOwnerWithSelect(sellerId, "_id");
+    const sellerProducts = await logQuery(req, 'ProductService.findByOwnerWithSelect', () => ProductService.findByOwnerWithSelect(sellerId, "_id"));
     const ownedIds = sellerProducts.map(p => p._id.toString());
 
     // ✅ Check if order contains seller's product
@@ -67,11 +68,11 @@ export const updateOrderStatus = async (req, res) => {
     if (!hasProduct) return res.status(403).json({ success: false, message: "Not allowed to update this order" });
 
     // ✅ Update status
-    const updatedOrder = await OrderService.updateStatus(order._id, status);
+    const updatedOrder = await logQuery(req, `OrderService.updateStatus(${orderId})`, () => OrderService.updateStatus(order._id, status));
 
     // ✅ If COD order is delivered, mark it as paid
     if (status === "delivered" && updatedOrder.paymentMethod === "COD") {
-      await OrderService.updatePaymentStatus(updatedOrder._id, true);
+      await logQuery(req, 'OrderService.updatePaymentStatus', () => OrderService.updatePaymentStatus(updatedOrder._id, true));
       updatedOrder.payment = true;
     }
 
@@ -89,7 +90,7 @@ export const updateOrderStatus = async (req, res) => {
       target: orderId,
       action: "UPDATE_ORDER_STATUS",
       message: `Order status updated from ${oldStatus} to ${status}`,
-      metadata: { orderId, oldStatus, newStatus: status },
+      metadata: { orderId, oldStatus, newStatus: status, requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
     });
@@ -97,7 +98,7 @@ export const updateOrderStatus = async (req, res) => {
     logError({
       error: err,
       context: "Update Order Status",
-      metadata: { orderId: req.body.orderId, sellerId: req.auth.userId }
+      metadata: { orderId: req.body.orderId, sellerId: req.auth.userId, requestId: req.requestId }
     });
     res.status(500).json({ success: false, message: err.message });
   }

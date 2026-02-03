@@ -115,6 +115,7 @@ export const systemLogger = winston.createLogger({
         new DailyRotateFile({
             filename: path.join(logDir, "server", "system-%DATE%.log"),
             datePattern: "YYYY-MM-DD",
+            maxSize: "20m",
             maxFiles: "30d",
             zippedArchive: true,
         }),
@@ -130,6 +131,7 @@ export const applicationLogger = winston.createLogger({
         new DailyRotateFile({
             filename: path.join(logDir, "server", "application-%DATE%.log"),
             datePattern: "YYYY-MM-DD",
+            maxSize: "20m",
             maxFiles: "30d",
             zippedArchive: true,
         }),
@@ -145,6 +147,7 @@ export const securityLogger = winston.createLogger({
         new DailyRotateFile({
             filename: path.join(logDir, "server", "security-%DATE%.log"),
             datePattern: "YYYY-MM-DD",
+            maxSize: "20m",
             maxFiles: "90d", // Keep longer for compliance
             zippedArchive: true,
         }),
@@ -159,7 +162,8 @@ export const accessLogger = winston.createLogger({
         new DailyRotateFile({
             filename: path.join(logDir, "server", "access-%DATE%.log"),
             datePattern: "YYYY-MM-DD",
-            maxFiles: "7d", // Access logs can be shorter
+            maxSize: "20m",
+            maxFiles: "14d", // Increased from 7d for better reach
             zippedArchive: true,
         }),
     ],
@@ -174,6 +178,7 @@ export const errorLogger = winston.createLogger({
         new DailyRotateFile({
             filename: path.join(logDir, "server", "error-%DATE%.log"),
             datePattern: "YYYY-MM-DD",
+            maxSize: "20m",
             maxFiles: "90d",
             zippedArchive: true,
         }),
@@ -218,6 +223,7 @@ export const logActivity = ({
 /**
  * Log HTTP access (request/response)
  * These go to access.log file only
+ * Enhanced with actor info for public API tracking
  */
 export const logAccess = ({
     method,
@@ -227,6 +233,8 @@ export const logAccess = ({
     requestId,
     ip,
     userAgent,
+    actorType = null,   // "ANON" | "USER"
+    userId = null,      // actual userId or anonymized identifier
 }) => {
     accessLogger.info(`${method} ${path} ${statusCode} ${responseTime}ms`, {
         method,
@@ -236,6 +244,8 @@ export const logAccess = ({
         requestId,
         ip,
         userAgent,
+        actorType,
+        userId,
     });
 };
 

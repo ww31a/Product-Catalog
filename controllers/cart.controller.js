@@ -2,13 +2,14 @@ import mongoose from "mongoose";
 import UserService from "../services/user.service.js";
 import AppUserService from "../services/appUser.service.js";
 import ProductService from "../services/product.service.js";
-import { logActivity } from "../utils/logger.js";
+import { logActivity, logError } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 
 const { ObjectId } = mongoose.Types;
 
 const getUserCart = async (req, res) => {
   try {
-    const user = await UserService.findByAppUserIdWithSelect(req.auth.userId, "cartData");
+    const user = await logQuery(req, 'UserService.findByAppUserIdWithSelect', () => UserService.findByAppUserIdWithSelect(req.auth.userId, "cartData"));
     const cartData = user?.cartData || {};
 
     const productIds = Object.keys(cartData).filter(id => ObjectId.isValid(id));
@@ -17,14 +18,15 @@ const getUserCart = async (req, res) => {
       return res.json({
         success: true,
         cartData: [],
-        removedItems: []
+        removedItems: [],
+        requestId: req.requestId
       });
     }
 
-    const products = await ProductService.findByIdsWithSelect(
+    const products = await logQuery(req, 'ProductService.findByIdsWithSelect', () => ProductService.findByIdsWithSelect(
       productIds,
       "title price image sizes stock"
-    );
+    ));
 
     const validCartItems = [];
     const removedItems = [];
@@ -33,7 +35,7 @@ const getUserCart = async (req, res) => {
       const cartItem = cartData[product._id];
 
       if (product.stock <= 0) {
-        await UserService.removeCartItem(req.auth.userId, product._id);
+        await logQuery(req, `UserService.removeCartItem(${product._id})`, () => UserService.removeCartItem(req.auth.userId, product._id));
 
         removedItems.push({
           productId: product._id,
@@ -59,13 +61,20 @@ const getUserCart = async (req, res) => {
     return res.json({
       success: true,
       cartData: validCartItems,
-      removedItems
+      removedItems,
+      requestId: req.requestId
     });
 
   } catch (err) {
+    logError({
+      error: err,
+      context: "Get User Cart",
+      metadata: { userId: req.auth.userId, requestId: req.requestId }
+    });
     res.status(500).json({
       error: true,
-      message: err.message
+      message: "Failed to retrieve cart",
+      requestId: req.requestId
     });
   }
 };
@@ -76,31 +85,31 @@ const addToCart = async (req, res) => {
     const { itemId, size } = req.body;
 
     if (!itemId) {
-      return res.status(400).json({ error: true, message: "itemId is required" });
+      return res.status(400).json({ error: true, message: "itemId is required", requestId: req.requestId });
     }
 
-    const product = await ProductService.findByIdWithSelect(itemId, "stock sizes");
+    const product = await logQuery(req, `ProductService.findByIdWithSelect(${itemId})`, () => ProductService.findByIdWithSelect(itemId, "stock sizes"));
     if (!product) {
-      return res.status(404).json({ error: true, message: "Product not found" });
+      return res.status(404).json({ error: true, message: "Product not found", requestId: req.requestId });
     }
 
     if (product.stock <= 0) {
-      return res.status(400).json({ error: true, message: "Item out of stock" });
+      return res.status(400).json({ error: true, message: "Item out of stock", requestId: req.requestId });
     }
 
     const hasSizes = product.sizes && product.sizes.length > 0;
 
     if (hasSizes && !size) {
-      return res.status(400).json({ error: true, message: "Please select a size" });
+      return res.status(400).json({ error: true, message: "Please select a size", requestId: req.requestId });
     }
 
     if (hasSizes && size && !product.sizes.includes(size)) {
-      return res.status(400).json({ error: true, message: `Size ${size} not available` });
+      return res.status(400).json({ error: true, message: `Size ${size} not available`, requestId: req.requestId });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
-    const appUser = await AppUserService.findById(userId);
-    const current = user.cartData[itemId] || { quantity: 0, size: null };
+    const user = await logQuery(req, 'UserService.findByAppUserIdWithSelect', () => UserService.findByAppUserIdWithSelect(userId, "cartData"));
+    const appUser = await logQuery(req, 'AppUserService.findById', () => AppUserService.findById(userId));
+    const current = user?.cartData?.[itemId] || { quantity: 0, size: null };
 
     const finalSize = hasSizes ? size : null;
     const newQty = current.quantity + 1;
@@ -108,11 +117,12 @@ const addToCart = async (req, res) => {
     if (newQty > product.stock) {
       return res.status(400).json({
         error: true,
-        message: `Only ${product.stock} items available in stock`
+        message: `Only ${product.stock} items available in stock`,
+        requestId: req.requestId
       });
     }
 
-    await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: finalSize });
+    await logQuery(req, `UserService.updateCartItem(${itemId})`, () => UserService.updateCartItem(userId, itemId, { quantity: newQty, size: finalSize }));
 
     logActivity({
       email: appUser?.email,
@@ -122,7 +132,7 @@ const addToCart = async (req, res) => {
       target: itemId,
       action: "ADD_TO_CART",
       message: `Added item to cart`,
-      metadata: { quantity: newQty, size: finalSize },
+      metadata: { quantity: newQty, size: finalSize, requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
     });
@@ -130,7 +140,8 @@ const addToCart = async (req, res) => {
     const response = {
       success: true,
       message: "Item added to cart",
-      quantity: newQty
+      quantity: newQty,
+      requestId: req.requestId
     };
 
     if (finalSize) {
@@ -141,7 +152,12 @@ const addToCart = async (req, res) => {
 
 
   } catch (err) {
-    res.status(500).json({ error: true, message: err.message });
+    logError({
+      error: err,
+      context: "Add To Cart",
+      metadata: { userId: req.auth.userId, itemId: req.body.itemId, requestId: req.requestId }
+    });
+    res.status(500).json({ error: true, message: "Failed to add item to cart", requestId: req.requestId });
   }
 };
 
@@ -151,24 +167,24 @@ const modifyCartQuantity = async (req, res) => {
     const { itemId, action } = req.body;
 
     if (!itemId || !action) {
-      return res.status(400).json({ error: true, message: "itemId and action required" });
+      return res.status(400).json({ error: true, message: "itemId and action required", requestId: req.requestId });
     }
 
     if (!["increase", "decrease"].includes(action)) {
-      return res.status(400).json({ error: true, message: "Action must be 'increase' or 'decrease'" });
+      return res.status(400).json({ error: true, message: "Action must be 'increase' or 'decrease'", requestId: req.requestId });
     }
 
-    const product = await ProductService.findByIdWithSelect(itemId, "stock");
+    const product = await logQuery(req, `ProductService.findByIdWithSelect(${itemId})`, () => ProductService.findByIdWithSelect(itemId, "stock"));
     if (!product) {
-      return res.status(404).json({ error: true, message: "Product not found" });
+      return res.status(404).json({ error: true, message: "Product not found", requestId: req.requestId });
     }
 
-    const user = await UserService.findByAppUserIdWithSelect(userId, "cartData");
-    const appUser = await AppUserService.findById(userId);
-    const current = user.cartData[itemId];
+    const user = await logQuery(req, 'UserService.findByAppUserIdWithSelect', () => UserService.findByAppUserIdWithSelect(userId, "cartData"));
+    const appUser = await logQuery(req, 'AppUserService.findById', () => AppUserService.findById(userId));
+    const current = user?.cartData?.[itemId];
 
     if (!current || current.quantity <= 0) {
-      return res.status(400).json({ error: true, message: "Item not in cart" });
+      return res.status(400).json({ error: true, message: "Item not in cart", requestId: req.requestId });
     }
 
     if (action === "increase") {
@@ -177,11 +193,12 @@ const modifyCartQuantity = async (req, res) => {
       if (newQty > product.stock) {
         return res.status(400).json({
           error: true,
-          message: `Only ${product.stock} items available in stock`
+          message: `Only ${product.stock} items available in stock`,
+          requestId: req.requestId
         });
       }
 
-      await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size });
+      await logQuery(req, `UserService.updateCartItem(${itemId}, increase)`, () => UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size }));
 
       logActivity({
         email: appUser?.email,
@@ -191,7 +208,7 @@ const modifyCartQuantity = async (req, res) => {
         target: itemId,
         action: "INCREASE_CART_QUANTITY",
         message: `Increased cart quantity`,
-        metadata: { newQuantity: newQty },
+        metadata: { newQuantity: newQty, requestId: req.requestId },
         ip: req.ip,
         userAgent: req.get("User-Agent")
       });
@@ -199,7 +216,8 @@ const modifyCartQuantity = async (req, res) => {
       const response = {
         success: true,
         message: "Quantity increased",
-        quantity: newQty
+        quantity: newQty,
+        requestId: req.requestId
       };
 
       if (current.size) {
@@ -211,7 +229,7 @@ const modifyCartQuantity = async (req, res) => {
 
     if (action === "decrease") {
       if (current.quantity === 1) {
-        await UserService.removeCartItem(userId, itemId);
+        await logQuery(req, `UserService.removeCartItem(${itemId})`, () => UserService.removeCartItem(userId, itemId));
 
         logActivity({
           email: appUser?.email,
@@ -221,15 +239,16 @@ const modifyCartQuantity = async (req, res) => {
           target: itemId,
           action: "REMOVE_FROM_CART",
           message: `Removed item from cart (qty decreased to 0)`,
+          metadata: { requestId: req.requestId },
           ip: req.ip,
           userAgent: req.get("User-Agent")
         });
 
-        return res.json({ success: true, message: "Item removed from cart", quantity: 0 });
+        return res.json({ success: true, message: "Item removed from cart", quantity: 0, requestId: req.requestId });
       }
 
       const newQty = current.quantity - 1;
-      await UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size });
+      await logQuery(req, `UserService.updateCartItem(${itemId}, decrease)`, () => UserService.updateCartItem(userId, itemId, { quantity: newQty, size: current.size }));
 
       logActivity({
         email: appUser?.email,
@@ -239,7 +258,7 @@ const modifyCartQuantity = async (req, res) => {
         target: itemId,
         action: "DECREASE_CART_QUANTITY",
         message: `Decreased cart quantity`,
-        metadata: { newQuantity: newQty },
+        metadata: { newQuantity: newQty, requestId: req.requestId },
         ip: req.ip,
         userAgent: req.get("User-Agent")
       });
@@ -247,7 +266,8 @@ const modifyCartQuantity = async (req, res) => {
       const response = {
         success: true,
         message: "Quantity decreased",
-        quantity: newQty
+        quantity: newQty,
+        requestId: req.requestId
       };
 
       if (current.size) {
@@ -257,7 +277,12 @@ const modifyCartQuantity = async (req, res) => {
       return res.json(response);
     }
   } catch (err) {
-    res.status(500).json({ error: true, message: err.message });
+    logError({
+      error: err,
+      context: "Modify Cart Quantity",
+      metadata: { userId: req.auth.userId, itemId: req.body.itemId, requestId: req.requestId }
+    });
+    res.status(500).json({ error: true, message: "Failed to modify cart quantity", requestId: req.requestId });
   }
 };
 
@@ -267,11 +292,11 @@ const removeFromCart = async (req, res) => {
     const { itemId } = req.params;
 
     if (!itemId) {
-      return res.status(400).json({ error: true, message: "itemId required" });
+      return res.status(400).json({ error: true, message: "itemId required", requestId: req.requestId });
     }
 
-    const appUser = await AppUserService.findById(userId);
-    await UserService.removeCartItem(userId, itemId);
+    const appUser = await logQuery(req, 'AppUserService.findById', () => AppUserService.findById(userId));
+    await logQuery(req, `UserService.removeCartItem(${itemId})`, () => UserService.removeCartItem(userId, itemId));
 
     logActivity({
       email: appUser?.email,
@@ -281,13 +306,19 @@ const removeFromCart = async (req, res) => {
       target: itemId,
       action: "REMOVE_FROM_CART",
       message: `Removed item from cart`,
+      metadata: { requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
     });
 
-    res.json({ success: true, message: "Item removed from cart" });
+    res.json({ success: true, message: "Item removed from cart", requestId: req.requestId });
   } catch (err) {
-    res.status(500).json({ error: true, message: err.message });
+    logError({
+      error: err,
+      context: "Remove From Cart",
+      metadata: { userId: req.auth.userId, itemId: req.params.itemId, requestId: req.requestId }
+    });
+    res.status(500).json({ error: true, message: "Failed to remove item from cart", requestId: req.requestId });
   }
 };
 

@@ -6,19 +6,21 @@ import { generateRoomId } from "../sockets/rooms.utils.js";
 import sharp from "sharp";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 import cloudinary from "../config/cloudinary.js";
+import { logActivity, logError } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 
 
 // List rooms for a user (buyer)
 export const getUserRooms = async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const rooms = await ChatMessageService.getUserRooms(userId, "user");
+    const rooms = await logQuery(req, 'ChatMessageService.getUserRooms', () => ChatMessageService.getUserRooms(userId, "user"));
 
     // Fetch support chats
-    const userDoc = await User.findOne({ userId });
+    const userDoc = await logQuery(req, 'User.findOne', () => User.findOne({ userId }));
     let supportRooms = [];
     if (userDoc) {
-      supportRooms = await AdminChatService.getParticipantConversations(userDoc._id);
+      supportRooms = await logQuery(req, 'AdminChatService.getParticipantConversations', () => AdminChatService.getParticipantConversations(userDoc._id));
     }
 
     // Merge and sort
@@ -28,6 +30,11 @@ export const getUserRooms = async (req, res) => {
 
     res.json({ success: true, rooms: allRooms });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Get User Chat Rooms",
+      metadata: { userId: req.auth.userId, requestId: req.requestId }
+    });
     res.status(500).json({ success: false, message: err.message });
   }
 };

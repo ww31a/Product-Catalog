@@ -3,25 +3,27 @@ import ProductService from '../services/product.service.js';
 import StockHistoryService from "../services/stockHistory.service.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 import { logActivity, logError, logApplication } from "../utils/logger.js";
+import { logQuery } from "../utils/logQuery.js";
 import AppUser from "../models/AppUser.module.js";
+import sharp from "sharp";
 
 export const getSellerProducts = async (req, res) => {
   try {
     const sellerId = req.auth.userId;
 
     if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
-      return res.status(400).json({ success: false, message: "Invalid seller ID" });
+      return res.status(400).json({ success: false, message: "Invalid seller ID", requestId: req.requestId });
     }
 
-    const products = await ProductService.findByOwner(sellerId);
-    return res.status(200).json({ success: true, products });
+    const products = await logQuery(req, 'ProductService.findByOwner', () => ProductService.findByOwner(sellerId));
+    return res.status(200).json({ success: true, products, requestId: req.requestId });
   } catch (err) {
     logError({
       error: err,
       context: "Get Seller Products",
-      metadata: { sellerId: req.auth.userId }
+      metadata: { sellerId: req.auth.userId, requestId: req.requestId }
     });
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, error: true, message: "Failed to fetch products", requestId: req.requestId });
   }
 };
 
@@ -31,22 +33,22 @@ export const getSellerProductByID = async (req, res) => {
     const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
-    const product = await ProductService.findByIdAndOwner(id, sellerId);
+    const product = await logQuery(req, `ProductService.findByIdAndOwner(${id})`, () => ProductService.findByIdAndOwner(id, sellerId));
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
+      return res.status(404).json({ success: false, message: "Product not found or not owned by you", requestId: req.requestId });
     }
 
-    res.status(200).json({ success: true, product });
+    res.status(200).json({ success: true, product, requestId: req.requestId });
   } catch (err) {
     logError({
       error: err,
       context: "Get Seller Product by ID",
-      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+      metadata: { sellerId: req.auth.userId, productId: req.params.id, requestId: req.requestId }
     });
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: true, message: "Failed to fetch product", requestId: req.requestId });
   }
 };
 
@@ -56,7 +58,7 @@ export const addProduct = async (req, res) => {
     const sellerId = req.auth.userId;
 
     if (!req.file?.buffer) {
-      return res.status(400).json({ success: false, message: "Image is required" });
+      return res.status(400).json({ success: false, message: "Image is required", requestId: req.requestId });
     }
 
     const result = await uploadBufferToCloudinary(req.file.buffer, "product_catalog");
@@ -68,12 +70,12 @@ export const addProduct = async (req, res) => {
       parsedSizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
       for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
-          return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL" });
+          return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL", requestId: req.requestId });
         }
       }
     }
 
-    const product = await ProductService.create({
+    const product = await logQuery(req, 'ProductService.create', () => ProductService.create({
       title,
       description,
       price,
@@ -83,11 +85,11 @@ export const addProduct = async (req, res) => {
       sizes: parsedSizes,
       image: result.secure_url,
       owner: sellerId
-    });
+    }));
 
     // Initial stock history
     if (product.stock > 0) {
-      await StockHistoryService.create({
+      await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
         productId: product._id,
         previousStock: 0,
         newStock: product.stock,
@@ -96,10 +98,10 @@ export const addProduct = async (req, res) => {
         reason: "restock",
         changedBy: sellerId,
         notes: "Initial stock added"
-      });
+      }));
     }
 
-    const sellerObj = await AppUser.findById(sellerId);
+    const sellerObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId));
     logActivity({
       email: sellerObj?.email,
       user: sellerId,
@@ -108,19 +110,19 @@ export const addProduct = async (req, res) => {
       target: product._id.toString(),
       action: "ADD_PRODUCT",
       message: `Product added: ${title}`,
-      metadata: { productId: product._id },
+      metadata: { productId: product._id, requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
     });
 
-    res.status(201).json({ success: true, product });
+    res.status(201).json({ success: true, product, requestId: req.requestId });
   } catch (err) {
     logError({
       error: err,
       context: "Add Product",
-      metadata: { sellerId: req.auth.userId, title: req.body.title }
+      metadata: { sellerId: req.auth.userId, title: req.body.title, requestId: req.requestId }
     });
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: true, message: "Failed to add product", requestId: req.requestId });
   }
 };
 
@@ -130,12 +132,12 @@ export const updateProduct = async (req, res) => {
     const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
-    const existingProduct = await ProductService.findByIdAndOwner(id, sellerId);
+    const existingProduct = await logQuery(req, `Product.findByIdAndOwner(${id})`, () => ProductService.findByIdAndOwner(id, sellerId));
     if (!existingProduct) {
-      return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
+      return res.status(404).json({ success: false, message: "Product not found or not owned by you", requestId: req.requestId });
     }
 
     const updatedData = { ...req.body };
@@ -160,7 +162,7 @@ export const updateProduct = async (req, res) => {
         : updatedData.sizes;
       for (let v of parsedSizes) {
         if (!["S", "M", "L", "XL"].includes(v)) {
-          return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL" });
+          return res.status(400).json({ success: false, message: "sizes must be one of: S, M, L, XL", requestId: req.requestId });
         }
       }
       updatedData.sizes = parsedSizes;
@@ -170,11 +172,11 @@ export const updateProduct = async (req, res) => {
     const previousStock = existingProduct.stock;
     const newStock = updatedData.stock !== undefined ? Number(updatedData.stock) : undefined;
 
-    const updatedProduct = await ProductService.update(id, updatedData);
+    const updatedProduct = await logQuery(req, 'ProductService.update', () => ProductService.update(id, updatedData));
 
     if (newStock !== undefined && previousStock !== newStock) {
       const change = newStock - previousStock;
-      await StockHistoryService.create({
+      await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
         productId: existingProduct._id,
         previousStock,
         newStock,
@@ -183,16 +185,16 @@ export const updateProduct = async (req, res) => {
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: sellerId,
         notes: `Stock ${change > 0 ? 'increased' : 'decreased'} by ${Math.abs(change)}`
-      });
+      }));
 
       logApplication({
         event: "STOCK_UPDATED",
         message: `Stock for ${existingProduct.title} updated from ${previousStock} to ${newStock}`,
-        metadata: { productId: id, previousStock, newStock, change }
+        metadata: { productId: id, previousStock, newStock, change, requestId: req.requestId }
       });
     }
 
-    const sellerObj = await AppUser.findById(sellerId);
+    const sellerObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId));
     logActivity({
       email: sellerObj?.email,
       user: sellerId,
@@ -201,19 +203,19 @@ export const updateProduct = async (req, res) => {
       target: id,
       action: "UPDATE_PRODUCT",
       message: `Product updated: ${updatedProduct.title}`,
-      metadata: { productId: id },
+      metadata: { productId: id, requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
     });
 
-    res.status(200).json({ success: true, product: updatedProduct });
+    res.status(200).json({ success: true, product: updatedProduct, requestId: req.requestId });
   } catch (err) {
     logError({
       error: err,
       context: "Update Product",
-      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+      metadata: { sellerId: req.auth.userId, productId: req.params.id, requestId: req.requestId }
     });
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: true, message: "Failed to update product", requestId: req.requestId });
   }
 };
 
@@ -223,17 +225,17 @@ export const deleteProduct = async (req, res) => {
     const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
-    const product = await ProductService.deleteByIdAndOwner(id, sellerId);
+    const product = await logQuery(req, `Product.deleteByIdAndOwner(${id})`, () => ProductService.deleteByIdAndOwner(id, sellerId));
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found or not owned by you" });
+      return res.status(404).json({ success: false, message: "Product not found or not owned by you", requestId: req.requestId });
     }
 
-    await StockHistoryService.deleteByProductId(id);
+    await logQuery(req, `StockHistoryService.deleteByProductId(${id})`, () => StockHistoryService.deleteByProductId(id));
 
-    const sellerObj = await AppUser.findById(sellerId);
+    const sellerObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId));
     logActivity({
       email: sellerObj?.email,
       user: sellerId,
@@ -242,7 +244,7 @@ export const deleteProduct = async (req, res) => {
       target: id,
       action: "DELETE_PRODUCT",
       message: `Product deleted: ${product.title}`,
-      metadata: { productId: id },
+      metadata: { productId: id, requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
     });
@@ -250,15 +252,16 @@ export const deleteProduct = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Product and its stock history deleted successfully",
-      product
+      product,
+      requestId: req.requestId
     });
   } catch (err) {
     logError({
       error: err,
       context: "Delete Product",
-      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+      metadata: { sellerId: req.auth.userId, productId: req.params.id, requestId: req.requestId }
     });
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: true, message: "Failed to delete product", requestId: req.requestId });
   }
 };
 
@@ -268,47 +271,49 @@ export const bulkDeleteProducts = async (req, res) => {
     const { productIds } = req.body;
 
     if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({ success: false, message: "productIds must be a non-empty array" });
+      return res.status(400).json({ success: false, message: "productIds must be a non-empty array", requestId: req.requestId });
     }
 
     const invalidIds = productIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
     if (invalidIds.length > 0) {
-      return res.status(400).json({ success: false, message: `Invalid product IDs: ${invalidIds.join(", ")}` });
+      return res.status(400).json({ success: false, message: `Invalid product IDs: ${invalidIds.join(", ")}`, requestId: req.requestId });
     }
 
-    const result = await ProductService.bulkDeleteByOwner(productIds, sellerId);
+    const result = await logQuery(req, 'ProductService.bulkDeleteByOwner', () => ProductService.bulkDeleteByOwner(productIds, sellerId));
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, message: "No products deleted. Make sure they exist and belong to you." });
+      return res.status(404).json({ success: false, message: "No products deleted. Make sure they exist and belong to you.", requestId: req.requestId });
     }
 
-    await StockHistoryService.deleteByProductIds(productIds);
+    await logQuery(req, 'StockHistoryService.deleteByProductIds', () => StockHistoryService.deleteByProductIds(productIds));
 
-    res.status(200).json({
-      success: true,
-      message: `${result.deletedCount} product(s) deleted successfully`,
-      deletedCount: result.deletedCount
-    });
-
+    const appUser = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId).lean());
     logActivity({
-      email: (await AppUser.findById(sellerId).lean())?.email,
+      email: appUser?.email,
       user: sellerId,
       role: "Seller",
       status: "success",
       action: "BULK_DELETE_PRODUCTS",
       message: `Bulk deleted ${result.deletedCount} products`,
-      metadata: { productIds },
+      metadata: { productIds, requestId: req.requestId },
       ip: req.ip,
       userAgent: req.get("User-Agent")
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `${result.deletedCount} product(s) deleted successfully`,
+      deletedCount: result.deletedCount,
+      requestId: req.requestId
     });
 
   } catch (err) {
     logError({
       error: err,
       context: "Bulk Delete Products",
-      metadata: { sellerId: req.auth.userId, productIds: req.body.productIds }
+      metadata: { sellerId: req.auth.userId, productIds: req.body.productIds, requestId: req.requestId }
     });
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: true, message: "Failed to bulk delete products", requestId: req.requestId });
   }
 };
 
@@ -319,26 +324,26 @@ export const updateStock = async (req, res) => {
     const sellerId = req.auth.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid product ID" });
+      return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
     if (stock === undefined || isNaN(stock) || Number(stock) < 0) {
-      return res.status(400).json({ success: false, message: "Stock must be non-negative" });
+      return res.status(400).json({ success: false, message: "Stock must be non-negative", requestId: req.requestId });
     }
 
-    const existingProduct = await ProductService.findByIdAndOwner(id, sellerId);
+    const existingProduct = await logQuery(req, `Product.findByIdAndOwner(${id})`, () => ProductService.findByIdAndOwner(id, sellerId));
     if (!existingProduct) {
-      return res.status(400).json({ success: false, message: "Product does not exist" });
+      return res.status(400).json({ success: false, message: "Product does not exist", requestId: req.requestId });
     }
 
     const previousStock = existingProduct.stock;
     const newStock = parseInt(stock);
 
-    const updatedProduct = await ProductService.updateStock(id, newStock);
+    const updatedProduct = await logQuery(req, `Product.updateStock(${id})`, () => ProductService.updateStock(id, newStock));
 
     if (previousStock !== newStock) {
       const change = newStock - previousStock;
-      await StockHistoryService.create({
+      await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
         productId: existingProduct._id,
         previousStock,
         newStock,
@@ -347,35 +352,36 @@ export const updateStock = async (req, res) => {
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: sellerId,
         notes: "Quick stock change from seller stock page"
-      });
+      }));
 
       logApplication({
         event: "STOCK_UPDATED",
         message: `Stock for ${existingProduct.title} updated (quick update) from ${previousStock} to ${newStock}`,
-        metadata: { productId: id, previousStock, newStock, change }
+        metadata: { productId: id, previousStock, newStock, change, requestId: req.requestId }
       });
 
+      const appUser = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId).lean());
       logActivity({
-        email: (await AppUser.findById(sellerId).lean())?.email,
+        email: appUser?.email,
         user: sellerId,
         role: "Seller",
         status: "success",
         target: id,
         action: "UPDATE_STOCK",
         message: `Stock updated for product ${id}: ${previousStock} -> ${newStock}`,
-        metadata: { productId: id, change },
+        metadata: { productId: id, change, requestId: req.requestId },
         ip: req.ip,
         userAgent: req.get("User-Agent")
       });
     }
 
-    res.status(200).json({ success: true, message: "Stock Updated Successfully", product: updatedProduct });
+    res.status(200).json({ success: true, message: "Stock Updated Successfully", product: updatedProduct, requestId: req.requestId });
   } catch (err) {
     logError({
       error: err,
       context: "Quick Update Stock",
-      metadata: { sellerId: req.auth.userId, productId: req.params.id }
+      metadata: { sellerId: req.auth.userId, productId: req.params.id, requestId: req.requestId }
     });
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: true, message: "Failed to update stock", requestId: req.requestId });
   }
 };

@@ -70,34 +70,32 @@ class SellerInventoryService {
 
   // Get comprehensive stock summary for a seller
   async getStockSummary(sellerId, threshold = 5) {
-    const totalProducts = await ProductService.countByOwner(sellerId);
-    const outOfStock = await ProductService.countOutOfStockByOwner(sellerId);
-    const lowStock = await ProductService.countLowStockByOwner(sellerId, threshold);
-    const inStock = await ProductService.countInStockByOwner(sellerId, threshold);
-
-    const inventoryValue = await ProductService.getInventoryValueByOwner(sellerId);
-
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const sellerProductIds = await this.getSellerProductIds(sellerId);
+    // ✅ PARALLEL EXECUTION - All queries run simultaneously
+    const [
+      totalProducts,
+      outOfStock,
+      lowStock,
+      inStock,
+      inventoryValue,
+      sellerProductIds
+    ] = await Promise.all([
+      ProductService.countByOwner(sellerId),
+      ProductService.countOutOfStockByOwner(sellerId),
+      ProductService.countLowStockByOwner(sellerId, threshold),
+      ProductService.countInStockByOwner(sellerId, threshold),
+      ProductService.getInventoryValueByOwner(sellerId),
+      this.getSellerProductIds(sellerId)
+    ]);
 
-    const recentChanges = await StockHistoryService.countByProductIds(
-      sellerProductIds,
-      sevenDaysAgo
-    );
-
-    const recentIncreases = await StockHistoryService.countByProductIdsAndType(
-      sellerProductIds,
-      'add',
-      sevenDaysAgo
-    );
-
-    const recentDecreases = await StockHistoryService.countByProductIdsAndType(
-      sellerProductIds,
-      'remove',
-      sevenDaysAgo
-    );
+    // ✅ Second batch - depends on sellerProductIds from first batch
+    const [recentChanges, recentIncreases, recentDecreases] = await Promise.all([
+      StockHistoryService.countByProductIds(sellerProductIds, sevenDaysAgo),
+      StockHistoryService.countByProductIdsAndType(sellerProductIds, 'add', sevenDaysAgo),
+      StockHistoryService.countByProductIdsAndType(sellerProductIds, 'remove', sevenDaysAgo)
+    ]);
 
     return {
       stockStatus: {
