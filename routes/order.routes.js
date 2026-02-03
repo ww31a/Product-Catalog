@@ -12,15 +12,15 @@ const orderRouter = express.Router();
 
 // orderRouter.get('/list',verifyAuth, authorizeRoles("seller"),allOrder);
 
-orderRouter.get('/seller', withLogging('Auth', verifyAuth), authorizeRoles("seller"), getSellerOrders)
-orderRouter.put('/seller/status', withLogging('Auth', verifyAuth), authorizeRoles("seller"), updateOrderStatus)
+orderRouter.get('/seller', withLogging('Auth', verifyAuth), authorizeRoles("seller"), withLogging('SELLER_LIST_ORDERS', getSellerOrders))
+orderRouter.put('/seller/status', withLogging('Auth', verifyAuth), authorizeRoles("seller"), withLogging('SELLER_UPDATE_ORDER_STATUS', updateOrderStatus))
 
-orderRouter.post('/place', withLogging('Auth', verifyAuth), authorizeRoles("user"), actionLimiter(), withLogging('Validation', validateBody(orderSchema)), placeOrderCOD)
-orderRouter.post('/stripe', withLogging('Auth', verifyAuth), authorizeRoles("user"), actionLimiter(), withLogging('Validation', validateBody(orderSchema)), placeOrderStripe)
+orderRouter.post('/place', withLogging('Auth', verifyAuth), authorizeRoles("user"), actionLimiter(), withLogging('Validation', validateBody(orderSchema)), withLogging('PLACE_ORDER_COD', placeOrderCOD))
+orderRouter.post('/stripe', withLogging('Auth', verifyAuth), authorizeRoles("user"), actionLimiter(), withLogging('Validation', validateBody(orderSchema)), withLogging('PLACE_ORDER_STRIPE', placeOrderStripe))
 
-orderRouter.post('/cancel', withLogging('Auth', verifyAuth), authorizeRoles("user"), actionLimiter(), cancelOrder)
-orderRouter.get('/', withLogging('Auth', verifyAuth), authorizeRoles("user"), getUserOrders)
-orderRouter.post('/verifystripe', withLogging('Auth', verifyAuth), authorizeRoles("user"), verifyStripe)
+orderRouter.post('/cancel', withLogging('Auth', verifyAuth), authorizeRoles("user"), actionLimiter(), withLogging('CANCEL_ORDER', cancelOrder))
+orderRouter.get('/', withLogging('Auth', verifyAuth), authorizeRoles("user"), withLogging('LIST_MY_ORDERS', getUserOrders))
+orderRouter.post('/verifystripe', withLogging('Auth', verifyAuth), authorizeRoles("user"), withLogging('VERIFY_STRIPE_PAYMENT', verifyStripe))
 
 
 export default orderRouter;
