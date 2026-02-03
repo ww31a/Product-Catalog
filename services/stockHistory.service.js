@@ -13,8 +13,8 @@ class StockHistoryService {
 
   // USED: superAdminManagement service
   async deleteByProductIds(productIds) {
-    return await StockHistory.deleteMany({ 
-      productId: { $in: productIds } 
+    return await StockHistory.deleteMany({
+      productId: { $in: productIds }
     });
   }
 
@@ -84,4 +84,6 @@ class StockHistoryService {
   }
 }
 
-export default new StockHistoryService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("StockHistoryService", new StockHistoryService());

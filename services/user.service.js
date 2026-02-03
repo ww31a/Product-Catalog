@@ -153,4 +153,6 @@ class UserService {
   }
 }
 
-export default new UserService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("UserService", new UserService());

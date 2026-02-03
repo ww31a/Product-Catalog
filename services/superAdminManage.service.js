@@ -288,4 +288,6 @@ class SuperAdminManagementService {
   }
 }
 
-export default new SuperAdminManagementService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("SuperAdminManageService", new SuperAdminManagementService());

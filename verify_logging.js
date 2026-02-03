@@ -26,7 +26,14 @@ const runVerification = async () => {
         const products = await ProductService.findAllWithSelect({}, "title", { limit: 1 });
         console.log(`Fetched ${products.length} products via Service Proxy.`);
 
-        console.log("\n4. Testing Mongoose Plugin (Simulated Slow Query)...");
+        const { types } = await import('util');
+
+        console.log("\n4. Testing Additional Service Wrapper (User Service)...");
+        const { default: UserService } = await import("./services/user.service.js");
+        const isUserProxy = types.isProxy(UserService);
+        console.log(`UserService is wrapped: ${isUserProxy}`);
+
+        console.log("\n5. Testing Mongoose Plugin (Simulated Slow Query)...");
 
         console.log("\n5. Testing restore of withLogging (Middleware)...");
         // Since we can't easily mock the express app in this script without spinning up a server,

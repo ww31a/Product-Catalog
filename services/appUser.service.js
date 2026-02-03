@@ -42,4 +42,6 @@ class AppUserService {
   }
 }
 
-export default new AppUserService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("AppUserService", new AppUserService());
