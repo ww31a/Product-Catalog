@@ -5,7 +5,6 @@ import AppUserService from "../services/appUser.service.js";
 import sellerService from "../services/seller.service.js";
 import { sendVerificationCode } from "../config/email.js";
 import { logActivity, logError, logSecurity } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
 
 const generateSecureOTP = () => {
   const otp = crypto.randomInt(100000, 999999).toString();
@@ -23,7 +22,7 @@ export const sellerRegister = async (req, res) => {
     const { name, password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    const exists = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email));
+    const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({
         success: false,
@@ -35,7 +34,7 @@ export const sellerRegister = async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const verificationCode = generateSecureOTP();
 
-    const seller = await logQuery(req, 'AppUserService.create', () => AppUserService.create({
+    const seller = await AppUserService.create({
       name,
       email,
       password: hash,
@@ -44,9 +43,9 @@ export const sellerRegister = async (req, res) => {
       verificationCode,
       verificationCodeType: "EMAIL_VERIFY",
       verificationCodeExpiresAt: getOTPExpiryTime()
-    }));
+    });
 
-    await logQuery(req, 'sellerService.create', () => sellerService.create({ userId: seller._id }));
+    await sellerService.create({ userId: seller._id });
 
     try {
       await sendVerificationCode(email, verificationCode);
@@ -95,12 +94,11 @@ export const sellerRegister = async (req, res) => {
   }
 };
 
-
 export const verifySellerEmail = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    const seller = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email.toLowerCase()));
+    const seller = await AppUserService.findByEmail(email.toLowerCase());
     if (
       !seller ||
       seller.verificationCodeType !== "EMAIL_VERIFY" ||
@@ -134,7 +132,7 @@ export const verifySellerEmail = async (req, res) => {
     seller.verificationCode = undefined;
     seller.verificationCodeType = undefined;
     seller.verificationCodeExpiresAt = undefined;
-    await logQuery(req, 'AppUser.save (verifySellerEmail)', () => seller.save());
+    await seller.save();
 
     logActivity({
       email: seller.email,
@@ -167,13 +165,12 @@ export const verifySellerEmail = async (req, res) => {
   }
 };
 
-
 export const sellerLogin = async (req, res) => {
   try {
     const { password } = req.body;
     const email = req.body.email.toLowerCase();
 
-    const seller = await logQuery(req, 'AppUserService.findByEmailWithRole', () => AppUserService.findByEmailWithRole(email, "seller"));
+    const seller = await AppUserService.findByEmailWithRole(email, "seller");
     if (!seller) {
       logSecurity({
         event: "LOGIN_FAILED",
@@ -211,7 +208,7 @@ export const sellerLogin = async (req, res) => {
     seller.verificationCode = otp;
     seller.verificationCodeType = "LOGIN_2FA";
     seller.verificationCodeExpiresAt = getOTPExpiryTime();
-    await logQuery(req, 'AppUser.save (sellerLogin)', () => seller.save());
+    await seller.save();
 
     try {
       await sendVerificationCode(email, otp);
@@ -252,7 +249,7 @@ export const verifySellerLoginOTP = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    const seller = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email.toLowerCase()));
+    const seller = await AppUserService.findByEmail(email.toLowerCase());
 
     if (
       !seller ||
@@ -286,7 +283,7 @@ export const verifySellerLoginOTP = async (req, res) => {
     seller.verificationCode = undefined;
     seller.verificationCodeType = undefined;
     seller.verificationCodeExpiresAt = undefined;
-    await logQuery(req, 'AppUser.save (verifySellerLoginOTP)', () => seller.save());
+    await seller.save();
 
     const token = generateToken({
       id: seller._id,
@@ -326,13 +323,11 @@ export const verifySellerLoginOTP = async (req, res) => {
   }
 };
 
-
-
 export const resendSellerVerificationCode = async (req, res) => {
   try {
     const email = req.body.email.toLowerCase();
 
-    const seller = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email));
+    const seller = await AppUserService.findByEmail(email);
     if (!seller || !seller.roles.includes("seller")) {
       return res.status(404).json({ success: false, message: "Seller not found", requestId: req.requestId });
     }
@@ -346,10 +341,9 @@ export const resendSellerVerificationCode = async (req, res) => {
     }
 
     const otp = generateSecureOTP();
-    user.verificationCode = otp; // Bug here in original file? user vs seller
     seller.verificationCode = otp;
     seller.verificationCodeExpiresAt = getOTPExpiryTime();
-    await logQuery(req, 'AppUser.save (resendSellerVerificationCode)', () => seller.save());
+    await seller.save();
 
     await sendVerificationCode(email, otp);
 

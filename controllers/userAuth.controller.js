@@ -6,7 +6,6 @@ import AppUserService from "../services/appUser.service.js";
 import UserService from "../services/user.service.js";
 import { sendVerificationCode } from "../config/email.js";
 import { logActivity, logError, logSecurity } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
 
 // ✅ SECURE OTP Generator using crypto
 const generateSecureOTP = () => {
@@ -24,7 +23,7 @@ export const userRegister = async (req, res) => {
     const email = req.body.email.toLowerCase();
 
     // Pre-check
-    const exists = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email));
+    const exists = await AppUserService.findByEmail(email);
     if (exists) {
       return res.status(400).json({ success: false, message: "User already exists", requestId: req.requestId });
     }
@@ -34,7 +33,7 @@ export const userRegister = async (req, res) => {
     const verificationCode = generateSecureOTP();
 
     // Create AppUser
-    const newUser = await logQuery(req, 'AppUserService.create', () => AppUserService.create({
+    const newUser = await AppUserService.create({
       name,
       email,
       password: hash,
@@ -43,10 +42,10 @@ export const userRegister = async (req, res) => {
       verificationCode,
       verificationCodeType: "EMAIL_VERIFY",
       verificationCodeExpiresAt: getOTPExpiryTime()
-    }));
+    });
 
     // Create User profile
-    await logQuery(req, 'UserService.create', () => UserService.create({ userId: newUser._id }));
+    await UserService.create({ userId: newUser._id });
 
     // Send verification email
     try {
@@ -102,7 +101,7 @@ export const verifyEmail = async (req, res) => {
     const { otp, email } = req.body;
     if (!otp || !email) return res.status(400).json({ success: false, message: "Email and OTP required", requestId: req.requestId });
 
-    const user = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email.toLowerCase()));
+    const user = await AppUserService.findByEmail(email.toLowerCase());
     if (
       !user ||
       user.verificationCodeType !== "EMAIL_VERIFY" ||
@@ -128,7 +127,7 @@ export const verifyEmail = async (req, res) => {
     user.verificationCode = undefined;
     user.verificationCodeType = undefined;
     user.verificationCodeExpiresAt = undefined;
-    await logQuery(req, 'User.save (verifyEmail)', () => user.save());
+    await user.save();
 
     logActivity({
       email: user.email,
@@ -167,7 +166,7 @@ export const userLogin = async (req, res) => {
     const { password, guestCart } = req.body;
     const email = req.body.email.toLowerCase();
 
-    const user = await logQuery(req, 'AppUserService.findByEmailWithRole', () => AppUserService.findByEmailWithRole(email, "user"));
+    const user = await AppUserService.findByEmailWithRole(email, "user");
     if (!user) {
       logSecurity({
         event: "LOGIN_FAILED",
@@ -196,12 +195,12 @@ export const userLogin = async (req, res) => {
       return res.status(403).json({ success: false, message: "Please verify email before login", requiresVerification: true, requestId: req.requestId });
     }
 
-    const userProfile = await logQuery(req, 'UserService.findByUserId', () => UserService.findByUserId(user._id));
+    const userProfile = await UserService.findByUserId(user._id);
     if (!userProfile) return res.status(403).json({ success: false, message: "User profile not initialized", requestId: req.requestId });
 
     // Merge guest cart
     if (Array.isArray(guestCart) && guestCart.length > 0) {
-      await logQuery(req, 'mergeGuestCartIntoUserCart', () => mergeGuestCartIntoUserCart(user._id, guestCart));
+      await mergeGuestCartIntoUserCart(user._id, guestCart);
     }
 
     // Generate LOGIN_2FA OTP
@@ -209,7 +208,7 @@ export const userLogin = async (req, res) => {
     user.verificationCode = otp;
     user.verificationCodeType = "LOGIN_2FA";
     user.verificationCodeExpiresAt = getOTPExpiryTime();
-    await logQuery(req, 'User.save (userLogin)', () => user.save());
+    await user.save();
 
     try {
       await sendVerificationCode(email, otp);
@@ -253,7 +252,7 @@ export const verifyUserLoginOTP = async (req, res) => {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ success: false, message: "Email and OTP required", requestId: req.requestId });
 
-    const user = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email.toLowerCase()));
+    const user = await AppUserService.findByEmail(email.toLowerCase());
     if (
       !user ||
       user.verificationCodeType !== "LOGIN_2FA" ||
@@ -278,7 +277,7 @@ export const verifyUserLoginOTP = async (req, res) => {
     user.verificationCode = undefined;
     user.verificationCodeType = undefined;
     user.verificationCodeExpiresAt = undefined;
-    await logQuery(req, 'User.save (verifyUserLoginOTP)', () => user.save());
+    await user.save();
 
     // Issue JWT
     const token = generateToken({ id: user._id, role: "user", roles: user.roles });
@@ -320,7 +319,7 @@ export const verifyUserLoginOTP = async (req, res) => {
 export const resendVerificationCode = async (req, res) => {
   try {
     const email = req.body.email.toLowerCase();
-    const user = await logQuery(req, 'AppUserService.findByEmail', () => AppUserService.findByEmail(email));
+    const user = await AppUserService.findByEmail(email);
 
     if (!user) return res.status(404).json({ success: false, message: "User not found", requestId: req.requestId });
 
@@ -331,7 +330,7 @@ export const resendVerificationCode = async (req, res) => {
     const otp = generateSecureOTP();
     user.verificationCode = otp;
     user.verificationCodeExpiresAt = getOTPExpiryTime();
-    await logQuery(req, 'User.save (resendVerificationCode)', () => user.save());
+    await user.save();
 
     await sendVerificationCode(email, otp);
 

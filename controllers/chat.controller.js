@@ -7,20 +7,20 @@ import sharp from "sharp";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 import cloudinary from "../config/cloudinary.js";
 import { logActivity, logError } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
-
 
 // List rooms for a user (buyer)
 export const getUserRooms = async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const rooms = await logQuery(req, 'ChatMessageService.getUserRooms', () => ChatMessageService.getUserRooms(userId, "user"));
+
+    const rooms = await ChatMessageService.getUserRooms(userId, "user");
 
     // Fetch support chats
-    const userDoc = await logQuery(req, 'User.findOne', () => User.findOne({ userId }));
+    const userDoc = await User.findOne({ userId });
     let supportRooms = [];
+
     if (userDoc) {
-      supportRooms = await logQuery(req, 'AdminChatService.getParticipantConversations', () => AdminChatService.getParticipantConversations(userDoc._id));
+      supportRooms = await AdminChatService.getParticipantConversations(userDoc._id);
     }
 
     // Merge and sort
@@ -33,8 +33,12 @@ export const getUserRooms = async (req, res) => {
     logError({
       error: err,
       context: "Get User Chat Rooms",
-      metadata: { userId: req.auth.userId, requestId: req.requestId }
+      metadata: {
+        userId: req.auth.userId,
+        requestId: req.requestId
+      }
     });
+
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -43,11 +47,13 @@ export const getUserRooms = async (req, res) => {
 export const getSellerRooms = async (req, res) => {
   try {
     const sellerId = req.auth.userId;
+
     const rooms = await ChatMessageService.getUserRooms(sellerId, "seller");
 
     // Fetch support chats
     const sellerDoc = await Seller.findOne({ userId: sellerId });
     let supportRooms = [];
+
     if (sellerDoc) {
       supportRooms = await AdminChatService.getParticipantConversations(sellerDoc._id);
     }
@@ -59,6 +65,15 @@ export const getSellerRooms = async (req, res) => {
 
     res.json({ success: true, rooms: allRooms });
   } catch (err) {
+    logError({
+      error: err,
+      context: "Get Seller Chat Rooms",
+      metadata: {
+        sellerId: req.auth.userId,
+        requestId: req.requestId
+      }
+    });
+
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -66,22 +81,34 @@ export const getSellerRooms = async (req, res) => {
 // Helper to build room id (for clients that want to compute server-side)
 export const getRoomId = async (req, res) => {
   const { userId, sellerId } = req.query;
+
   if (!userId || !sellerId) {
-    return res.status(400).json({ success: false, message: "userId and sellerId are required" });
+    return res.status(400).json({
+      success: false,
+      message: "userId and sellerId are required"
+    });
   }
-  return res.json({ success: true, roomId: generateRoomId(userId, sellerId) });
+
+  return res.json({
+    success: true,
+    roomId: generateRoomId(userId, sellerId)
+  });
 };
 
 export const uploadChatImage = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file provided" });
+      return res.status(400).json({
+        success: false,
+        message: "No file provided"
+      });
     }
 
     let result;
     let type;
     let finalUrl;
 
+    // IMAGE
     if (req.file.mimetype.startsWith("image/")) {
       const compressedBuffer = await sharp(req.file.buffer)
         .rotate()
@@ -89,26 +116,37 @@ export const uploadChatImage = async (req, res) => {
         .jpeg({ quality: 70 })
         .toBuffer();
 
-      result = await uploadBufferToCloudinary(compressedBuffer, "chat-files", "image");
+      result = await uploadBufferToCloudinary(
+        compressedBuffer,
+        "chat-files",
+        "image"
+      );
+
       type = "image";
       finalUrl = result.secure_url;
+    }
 
-    } else if (req.file.mimetype === "application/pdf") {
-      // Upload PDF as RAW for download
+    // PDF
+    else if (req.file.mimetype === "application/pdf") {
       const timestamp = Date.now();
       const filename = req.file.originalname.replace(/\.[^/.]+$/, "");
 
-      result = await uploadBufferToCloudinary(req.file.buffer, "chat-files", "raw",
+      result = await uploadBufferToCloudinary(
+        req.file.buffer,
+        "chat-files",
+        "raw",
         {
           public_id: `${timestamp}_${filename}`,
           resource_type: "raw"
         }
       );
 
-      finalUrl = result.secure_url;  // Raw PDF for download
       type = "pdf";
+      finalUrl = result.secure_url;
+    }
 
-    } else {
+    // UNSUPPORTED
+    else {
       return res.status(400).json({
         success: false,
         message: "Unsupported file type"
@@ -117,14 +155,25 @@ export const uploadChatImage = async (req, res) => {
 
     res.json({
       success: true,
-      downloadUrl: finalUrl,  // For images and PDF downloads
+      downloadUrl: finalUrl,
       imageUrl: type === "image" ? finalUrl : null,
       type,
-      publicId: result.public_id,
+      publicId: result.public_id
     });
 
   } catch (error) {
-    console.error("[uploadChatFile] Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    logError({
+      error,
+      context: "Upload Chat File",
+      metadata: {
+        requestId: req.requestId,
+        mimetype: req.file?.mimetype
+      }
+    });
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
