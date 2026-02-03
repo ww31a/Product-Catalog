@@ -1,5 +1,6 @@
 
 import { logApplication } from './logger.js';
+import { getRequestId } from './requestContext.js';
 
 /**
  * Mongoose plugin to log slow queries.
@@ -25,7 +26,10 @@ export const queryLoggerPlugin = (schema) => {
                         event: 'SLOW_DB_QUERY',
                         level: 'warn',
                         message: `${this.model?.modelName || 'Query'}.${method} took ${Math.round(durationMs)}ms`,
-                        metadata: { duration: Math.round(durationMs) }
+                        metadata: { 
+                            duration: Math.round(durationMs),
+                            requestId: getRequestId()
+                        }
                     });
                 }
             }

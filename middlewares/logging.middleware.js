@@ -30,12 +30,13 @@ export const loggingMiddleware = (req, res, next) => {
       "unknown";
 
     // Determine actor type and ID
-    const isAuthenticated = !!req.auth?.userId;
+    const userId = req.auth?.userId || req.user?.id;
+    const isAuthenticated = !!userId;
     const actorType = isAuthenticated ? "USER" : "ANON";
 
     // Unified userId: actual ID if logged in, hash if ANON
-    const userId = isAuthenticated
-      ? req.auth.userId
+    const loggedUserId = isAuthenticated
+      ? userId
       : crypto.createHash("sha256")
         .update(ip + (req.get("user-agent") || ""))
         .digest("hex")
@@ -50,7 +51,7 @@ export const loggingMiddleware = (req, res, next) => {
       ip,
       userAgent: parseUserAgent(req.get("user-agent")),
       actorType,
-      userId
+      userId: loggedUserId
     });
   });
 

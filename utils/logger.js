@@ -3,6 +3,7 @@ import Transport from "winston-transport";
 import DailyRotateFile from "winston-daily-rotate-file";
 import path from "path";
 import ActivityLog from "../models/ActivityLog.module.js";
+import { getRequestId } from "./requestContext.js";
 
 // Custom Transport for MongoDB (Activity Logs Only)
 class ActivityDatabaseTransport extends Transport {
@@ -216,6 +217,7 @@ export const logActivity = ({
         userTypeModel,
         ip,
         userAgent,
+        requestId: getRequestId(),
         ...metadata,
     });
 };
@@ -241,7 +243,7 @@ export const logAccess = ({
         path,
         statusCode,
         responseTime,
-        requestId,
+        requestId: requestId || getRequestId(),
         ip,
         userAgent,
         actorType,
@@ -265,6 +267,7 @@ export const logSecurity = ({
         event,
         user,
         ip,
+        requestId: getRequestId(),
         ...metadata,
     });
 };
@@ -276,6 +279,7 @@ export const logSecurity = ({
 export const logSystem = ({ event, level = "info", message, metadata = {} }) => {
     systemLogger.log(level, message, {
         event,
+        requestId: getRequestId(),
         ...metadata,
     });
 };
@@ -287,6 +291,7 @@ export const logSystem = ({ event, level = "info", message, metadata = {} }) => 
 export const logApplication = ({ event, level = "info", message, metadata = {} }) => {
     applicationLogger.log(level, message, {
         event,
+        requestId: getRequestId(),
         ...metadata,
     });
 };
@@ -299,6 +304,7 @@ export const logError = ({ error, context, stack = null, metadata = {} }) => {
     errorLogger.error(error.message || error, {
         context,
         stack: stack || error.stack,
+        requestId: getRequestId(),
         ...metadata,
     });
 };

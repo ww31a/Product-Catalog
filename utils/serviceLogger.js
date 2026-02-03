@@ -1,5 +1,6 @@
 
 import { logApplication, logError } from './logger.js';
+import { getRequestId } from './requestContext.js';
 
 /**
  * Wraps a service instance with logging capabilities.
@@ -32,7 +33,10 @@ export const createLoggedService = (serviceName, serviceInstance) => {
                             event: 'SLOW_SERVICE_OP',
                             level: 'warn',
                             message: `${operation} took ${Math.round(durationMs)}ms`,
-                            metadata: { duration: Math.round(durationMs) }
+                            metadata: { 
+                                duration: Math.round(durationMs),
+                                requestId: getRequestId()
+                            }
                         });
                     } else {
                         // Optional: Log ALL queries as debug/info if needed, keeping it silent for now to reduce noise
@@ -44,7 +48,10 @@ export const createLoggedService = (serviceName, serviceInstance) => {
                     logError({
                         error,
                         context: `Service: ${operation}`,
-                        metadata: { duration: Number(process.hrtime.bigint() - start) / 1e6 }
+                        metadata: { 
+                            duration: Number(process.hrtime.bigint() - start) / 1e6,
+                            requestId: getRequestId()
+                        }
                     });
                     throw error;
                 }
