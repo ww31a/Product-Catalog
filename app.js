@@ -27,6 +27,35 @@ import { logSystem, logError } from './utils/logger.js';
 import meRouter from './routes/me.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
+// Global Crash Handlers - Must be registered early
+process.on('uncaughtException', (error) => {
+  logError({
+    error,
+    context: "Uncaught Exception - CRITICAL",
+    metadata: { type: "PROCESS_CRASH" }
+  });
+  logSystem({
+    event: "CRITICAL_ERROR",
+    message: `Uncaught Exception detected: ${error.message}`,
+    metadata: { stack: error.stack }
+  });
+  console.error("CRITICAL ERROR: Uncaught Exception. Exiting...", error);
+  process.exit(1); // Exit with failure to allow restart by PM2/Docker
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logError({
+    error: reason instanceof Error ? reason : new Error(String(reason)),
+    context: "Unhandled Rejection",
+    metadata: { type: "PROMISE_REJECTION" }
+  });
+  logSystem({
+    event: "UNHANDLED_REJECTION",
+    message: `Unhandled Rejection detected: ${reason instanceof Error ? reason.message : reason}`
+  });
+  console.error("Unhandled Rejection:", reason);
+});
+
 const app = express();
 
 app.set('trust proxy', 1);
