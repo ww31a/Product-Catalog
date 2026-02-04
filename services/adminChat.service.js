@@ -213,4 +213,6 @@ class AdminChatService {
     }
 }
 
-export default new AdminChatService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("AdminChatService", new AdminChatService());

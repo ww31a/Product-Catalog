@@ -4,7 +4,6 @@ import UserService from "../services/user.service.js";
 import ProductService from "../services/product.service.js";
 import StockHistoryService from "../services/stockHistory.service.js";
 import { logActivity, logError } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
 import AppUser from "../models/AppUser.module.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -17,10 +16,9 @@ const placeOrderCOD = async (req, res) => {
         const userId = req.auth.userId;
         const { items, amount, address } = req.body;
 
-        // Validate stock availability and enrich items with sellerId
         const enrichedItems = [];
         for (const item of items) {
-            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
+            const product = await ProductService.findById(item._id);
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${item.title}` });
             }
@@ -28,7 +26,6 @@ const placeOrderCOD = async (req, res) => {
                 return res.status(400).json({ message: `Not enough stock for ${product.title}` });
             }
 
-            // Attach sellerId so frontend can open chat with seller per item
             enrichedItems.push({
                 ...item,
                 sellerId: product.owner?.toString() || product.owner
@@ -45,14 +42,13 @@ const placeOrderCOD = async (req, res) => {
             date: Date.now()
         };
 
-        const newOrder = await logQuery(req, 'OrderService.create', () => OrderService.create(orderData));
+        const newOrder = await OrderService.create(orderData);
 
-        // Process stock reduction and history
         for (const item of enrichedItems) {
-            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
+            const product = await ProductService.findById(item._id);
 
             if (!product || product.stock < item.quantity) {
-                await logQuery(req, `OrderService.delete(${newOrder._id})`, () => OrderService.delete(newOrder._id));
+                await OrderService.delete(newOrder._id);
                 return res.status(400).json({
                     success: false,
                     message: `Not enough stock for product: ${product?.title || item._id}`,
@@ -60,25 +56,24 @@ const placeOrderCOD = async (req, res) => {
             }
 
             const previousStock = product.stock;
-            await logQuery(req, `Product.decrementStock(${product._id})`, () => ProductService.decrementStock(product._id, item.quantity));
-            const newStock = previousStock - item.quantity;
+            await ProductService.decrementStock(product._id, item.quantity);
 
-            await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
+            await StockHistoryService.create({
                 productId: product._id,
                 previousStock,
-                newStock,
+                newStock: previousStock - item.quantity,
                 change: -item.quantity,
                 type: "remove",
                 reason: "sale",
                 changedBy: product.owner,
                 orderId: newOrder.orderId,
                 notes: `Stock reduced for COD order ${newOrder.orderId}`
-            }));
+            });
         }
 
-        await logQuery(req, 'UserService.clearCart', () => UserService.clearCart(userId));
+        await UserService.clearCart(userId);
 
-        const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId));
+        const userObj = await AppUser.findById(userId);
         logActivity({
             email: userObj?.email,
             user: userId,
@@ -119,10 +114,9 @@ const placeOrderStripe = async (req, res) => {
         const { items, amount, address } = req.body;
         const { origin } = req.headers;
 
-        // Validate stock availability and enrich items with sellerId
         const enrichedItems = [];
         for (const item of items) {
-            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
+            const product = await ProductService.findById(item._id);
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${item.title}`, requestId: req.requestId });
             }
@@ -150,16 +144,13 @@ const placeOrderStripe = async (req, res) => {
             date: Date.now()
         };
 
-        const newOrder = await logQuery(req, 'OrderService.create', () => OrderService.create(orderData));
+        const newOrder = await OrderService.create(orderData);
 
-        // Build Stripe line items
-        const line_items = enrichedItems.map((item) => ({
+        const line_items = enrichedItems.map(item => ({
             price_data: {
                 currency,
-                product_data: {
-                    name: item.title,
-                },
-                unit_amount: item.price * 100,
+                product_data: { name: item.title },
+                unit_amount: item.price * 100
             },
             quantity: item.quantity
         }));
@@ -167,10 +158,8 @@ const placeOrderStripe = async (req, res) => {
         line_items.push({
             price_data: {
                 currency,
-                product_data: {
-                    name: "Delivery Charges",
-                },
-                unit_amount: deliveryCharges * 100,
+                product_data: { name: "Delivery Charges" },
+                unit_amount: deliveryCharges * 100
             },
             quantity: 1
         });
@@ -178,10 +167,8 @@ const placeOrderStripe = async (req, res) => {
         line_items.push({
             price_data: {
                 currency,
-                product_data: {
-                    name: "Tax (5%)",
-                },
-                unit_amount: Math.round(tax * 100),
+                product_data: { name: "Tax (5%)" },
+                unit_amount: Math.round(tax * 100)
             },
             quantity: 1
         });
@@ -193,7 +180,7 @@ const placeOrderStripe = async (req, res) => {
             mode: 'payment'
         });
 
-        const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId).lean());
+        const userObj = await AppUser.findById(userId).lean();
         logActivity({
             email: userObj?.email,
             user: userId,
@@ -224,18 +211,17 @@ const verifyStripe = async (req, res) => {
     const { success, orderId } = req.body;
 
     try {
-        const order = await logQuery(req, `OrderService.findById(${orderId})`, () => OrderService.findById(orderId));
+        const order = await OrderService.findById(orderId);
         if (!order) {
             return res.status(404).json({ message: 'Order not found', requestId: req.requestId });
         }
 
         if (success === "true" || success === true) {
-            // Process stock reduction
             for (const item of order.items) {
-                const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
+                const product = await ProductService.findById(item._id);
 
                 if (!product) {
-                    await logQuery(req, `OrderService.delete(${orderId})`, () => OrderService.delete(orderId));
+                    await OrderService.delete(orderId);
                     return res.status(404).json({
                         message: `Product not found: ${item.title}`,
                         requestId: req.requestId
@@ -243,7 +229,7 @@ const verifyStripe = async (req, res) => {
                 }
 
                 if (product.stock < item.quantity) {
-                    await logQuery(req, `OrderService.delete(${orderId})`, () => OrderService.delete(orderId));
+                    await OrderService.delete(orderId);
                     return res.status(400).json({
                         message: `Not enough stock for ${product.title}`,
                         requestId: req.requestId
@@ -251,26 +237,25 @@ const verifyStripe = async (req, res) => {
                 }
 
                 const previousStock = product.stock;
-                await logQuery(req, `Product.decrementStock(${product._id})`, () => ProductService.decrementStock(product._id, item.quantity));
-                const newStock = previousStock - item.quantity;
+                await ProductService.decrementStock(product._id, item.quantity);
 
-                await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
+                await StockHistoryService.create({
                     productId: product._id,
                     previousStock,
-                    newStock,
+                    newStock: previousStock - item.quantity,
                     change: -item.quantity,
                     type: "remove",
                     reason: "sale",
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock reduced for Stripe order ${order.orderId} (payment confirmed)`
-                }));
+                });
             }
 
-            await logQuery(req, `OrderService.updatePaymentStatus(${orderId})`, () => OrderService.updatePaymentStatus(orderId, true));
-            await logQuery(req, 'UserService.clearCart', () => UserService.clearCart(userId));
+            await OrderService.updatePaymentStatus(orderId, true);
+            await UserService.clearCart(userId);
 
-            const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId));
+            const userObj = await AppUser.findById(userId);
             logActivity({
                 email: userObj?.email,
                 user: userId,
@@ -290,7 +275,7 @@ const verifyStripe = async (req, res) => {
                 requestId: req.requestId
             });
         } else {
-            await logQuery(req, `OrderService.delete(${orderId})`, () => OrderService.delete(orderId));
+            await OrderService.delete(orderId);
             res.json({
                 success: false,
                 message: 'Payment cancelled or failed',
@@ -312,20 +297,18 @@ const getUserOrders = async (req, res) => {
     try {
         const userId = req.auth.userId;
 
-        const orders = await logQuery(req, 'OrderService.findAll', () => OrderService.findAll({
+        const orders = await OrderService.findAll({
             userId,
             $or: [{ paymentMethod: "COD" }, { payment: true }]
-        }));
+        });
 
-        // Ensure each item has sellerId (for older orders created before this field was stored)
         const productOwnerCache = new Map();
-
         const enrichedOrders = [];
+
         for (const order of orders) {
             const enrichedItems = [];
 
             for (const item of order.items) {
-                // If sellerId already present, keep as is
                 if (item.sellerId) {
                     enrichedItems.push(item);
                     continue;
@@ -337,11 +320,10 @@ const getUserOrders = async (req, res) => {
                     continue;
                 }
 
-                // Try cache first
                 let ownerId = productOwnerCache.get(productId);
 
                 if (!ownerId) {
-                    const product = await logQuery(req, `Product.findById(${productId})`, () => ProductService.findById(productId));
+                    const product = await ProductService.findById(productId);
                     if (product) {
                         ownerId = product.owner?.toString() || product.owner;
                         productOwnerCache.set(productId, ownerId);
@@ -376,7 +358,7 @@ const cancelOrder = async (req, res) => {
         const userId = req.auth.userId;
         const { orderId } = req.body;
 
-        const order = await logQuery(req, `OrderService.findById(${orderId})`, () => OrderService.findById(orderId));
+        const order = await OrderService.findById(orderId);
 
         if (!order) {
             return res.status(404).json({ message: "Order not found", requestId: req.requestId });
@@ -393,32 +375,30 @@ const cancelOrder = async (req, res) => {
             });
         }
 
-        // Restore stock
         for (const item of order.items) {
-            const product = await logQuery(req, `Product.findById(${item._id})`, () => ProductService.findById(item._id));
+            const product = await ProductService.findById(item._id);
 
             if (product) {
                 const previousStock = product.stock;
-                await logQuery(req, `Product.incrementStock(${product._id})`, () => ProductService.incrementStock(product._id, item.quantity));
-                const newStock = previousStock + item.quantity;
+                await ProductService.incrementStock(product._id, item.quantity);
 
-                await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
+                await StockHistoryService.create({
                     productId: product._id,
                     previousStock,
-                    newStock,
+                    newStock: previousStock + item.quantity,
                     change: item.quantity,
                     type: "add",
                     reason: "return",
                     changedBy: product.owner,
                     orderId: order.orderId,
                     notes: `Stock restored - Order ${order.orderId} cancelled by customer`
-                }));
+                });
             }
         }
 
-        const updatedOrder = await logQuery(req, `OrderService.updateStatus(${order._id})`, () => OrderService.updateStatus(order._id, "cancelled"));
+        const updatedOrder = await OrderService.updateStatus(order._id, "cancelled");
 
-        const userObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(userId));
+        const userObj = await AppUser.findById(userId);
         logActivity({
             email: userObj?.email,
             user: userId,

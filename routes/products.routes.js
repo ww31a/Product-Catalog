@@ -11,21 +11,21 @@ import { withLogging } from "../middlewares/withLogging.js";
 const router = express.Router();
 
 // Protected ADMIN routes 
-router.get("/seller", verifyAuth, authorizeRoles("seller"), withLogging('SELLER_LIST_MY_PRODUCTS', getSellerProducts));
-router.get("/seller/product/:id", verifyAuth, authorizeRoles("seller"), withLogging('SELLER_VIEW_PRODUCT', getSellerProductByID)); //not used
+router.get("/seller", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getSellerProducts);
+router.get("/seller/product/:id", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getSellerProductByID); //not used
 
-router.post("/", verifyAuth, authorizeRoles("seller"), upload.single("image"), validateBody(productSchema), withLogging('SELLER_ADD_PRODUCT', addProduct));
-
-
-router.put("/:id", verifyAuth, authorizeRoles("seller"), upload.single("image"), validateBody(updateProductSchema), withLogging('SELLER_UPDATE_PRODUCT', updateProduct));
-router.patch("/:id/stock", verifyAuth, authorizeRoles("seller"), withLogging('SELLER_UPDATE_STOCK', updateStock))
+router.post("/", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), upload.single("image"), withLogging('Validation', validateBody(productSchema)), addProduct);
 
 
-router.delete("/:id", verifyAuth, authorizeRoles("seller"), withLogging('SELLER_DELETE_PRODUCT', deleteProduct));
-router.post("/seller/bulk-delete", verifyAuth, authorizeRoles("seller"), withLogging('SELLER_BULK_DELETE_PRODUCTS', bulkDeleteProducts))
+router.put("/:id", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), upload.single("image"), withLogging('Validation', validateBody(updateProductSchema)), updateProduct);
+router.patch("/:id/stock", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), updateStock)
+
+
+router.delete("/:id", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), deleteProduct);
+router.post("/seller/bulk-delete", withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), bulkDeleteProducts)
 
 // Public route 
-router.get("/", withLogging('LIST_PRODUCTS_PUBLIC', getAllProducts));
-router.get("/product/:id", withLogging('VIEW_PRODUCT_PUBLIC', getProductByID));
+router.get("/", getAllProducts);
+router.get("/product/:id", getProductByID);
 
 export default router;

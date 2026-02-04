@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import SuperAdminManagementService from "../services/superAdminManage.service.js";
 import { logActivity, logError } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
 import SuperAdmin from "../models/superAdmin.module.js";
 
 export const getAllSellers = async (req, res) => {
@@ -17,7 +16,7 @@ export const getAllSellers = async (req, res) => {
             ];
         }
 
-        const data = await logQuery(req, 'SuperAdminManagementService.getAllSellers', () => SuperAdminManagementService.getAllSellers(query, page, limit));
+        const data = await SuperAdminManagementService.getAllSellers(query, page, limit);
 
         res.json({
             success: true,
@@ -44,7 +43,7 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
-        const seller = await logQuery(req, `SuperAdminManagementService.deleteSeller(${sellerId})`, () => SuperAdminManagementService.deleteSeller(sellerId));
+        const seller = await SuperAdminManagementService.deleteSeller(sellerId);
         if (!seller) {
             return res.status(404).json({
                 success: false,
@@ -52,7 +51,7 @@ export const deleteSeller = async (req, res) => {
             });
         }
 
-        const admin = await logQuery(req, 'SuperAdmin.findById', () => SuperAdmin.findById(req.user.id));
+        const admin = await SuperAdmin.findById(req.user.id);
         logActivity({
             email: admin?.email,
             user: req.user.id,

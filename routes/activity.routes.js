@@ -14,12 +14,12 @@ import { withLogging } from "../middlewares/withLogging.js";
 const activityRouter = Router();
 
 // Endpoint for users/sellers to see their own activity
-activityRouter.get("/me", verifyAuth, withLogging('VIEW_MY_ACTIVITY', getMyActivity));
+activityRouter.get("/me", withLogging('Auth', verifyAuth), getMyActivity);
 
 // All other activity routes are restricted to Super Admin
-activityRouter.get("/users", verifySuperAdmin, withLogging('ADMIN_VIEW_USER_ACTIVITY', getUserActivity));
-activityRouter.get("/sellers", verifySuperAdmin, withLogging('ADMIN_VIEW_SELLER_ACTIVITY', getSellerActivity));
-activityRouter.get("/admins", verifySuperAdmin, withLogging('ADMIN_VIEW_ADMIN_ACTIVITY', getAdminActivity));
-activityRouter.get("/all", verifySuperAdmin, withLogging('ADMIN_VIEW_ALL_ACTIVITY_LOGS', getActivityLogs));
+activityRouter.get("/users", withLogging('AuthSuper', verifySuperAdmin), getUserActivity);
+activityRouter.get("/sellers", withLogging('AuthSuper', verifySuperAdmin), getSellerActivity);
+activityRouter.get("/admins", withLogging('AuthSuper', verifySuperAdmin), getAdminActivity);
+activityRouter.get("/all", withLogging('AuthSuper', verifySuperAdmin), getActivityLogs);
 
 export default activityRouter;

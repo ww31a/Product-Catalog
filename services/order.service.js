@@ -197,4 +197,6 @@ class OrderService {
   }
 }
 
-export default new OrderService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("OrderService", new OrderService());

@@ -50,4 +50,6 @@ class SellerService {
   }
 }
 
-export default new SellerService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("SellerService", new SellerService());

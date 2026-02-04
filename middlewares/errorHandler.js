@@ -2,16 +2,16 @@ import { logError } from '../utils/logger.js';
 
 /**
  * Catches errors in routes and sends proper response
+ * RequestId is automatically captured from AsyncLocalStorage context
  */
 export const errorHandler = (err, req, res, next) => {
     const statusCode = err.status || 500;
 
-    // Log the error
+    // Log the error - requestId auto-captured from context
     logError({
         error: err,
         context: 'Route Error',
         metadata: {
-            requestId: req?.requestId,
             path: req?.path,
             method: req?.method,
             userId: req?.auth?.userId ?? null

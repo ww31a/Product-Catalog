@@ -3,7 +3,6 @@ import ProductService from '../services/product.service.js';
 import StockHistoryService from "../services/stockHistory.service.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 import { logActivity, logError, logApplication } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
 import AppUser from "../models/AppUser.module.js";
 import sharp from "sharp";
 
@@ -15,7 +14,7 @@ export const getSellerProducts = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid seller ID", requestId: req.requestId });
     }
 
-    const products = await logQuery(req, 'ProductService.findByOwner', () => ProductService.findByOwner(sellerId));
+    const products = await ProductService.findByOwner(sellerId);
     return res.status(200).json({ success: true, products, requestId: req.requestId });
   } catch (err) {
     logError({
@@ -36,7 +35,7 @@ export const getSellerProductByID = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
-    const product = await logQuery(req, `ProductService.findByIdAndOwner(${id})`, () => ProductService.findByIdAndOwner(id, sellerId));
+    const product = await ProductService.findByIdAndOwner(id, sellerId);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you", requestId: req.requestId });
     }
@@ -63,8 +62,6 @@ export const addProduct = async (req, res) => {
 
     const result = await uploadBufferToCloudinary(req.file.buffer, "product_catalog");
 
-
-    // Parse sizes
     let parsedSizes = [];
     if (sizes) {
       parsedSizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
@@ -75,7 +72,7 @@ export const addProduct = async (req, res) => {
       }
     }
 
-    const product = await logQuery(req, 'ProductService.create', () => ProductService.create({
+    const product = await ProductService.create({
       title,
       description,
       price,
@@ -85,11 +82,10 @@ export const addProduct = async (req, res) => {
       sizes: parsedSizes,
       image: result.secure_url,
       owner: sellerId
-    }));
+    });
 
-    // Initial stock history
     if (product.stock > 0) {
-      await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
+      await StockHistoryService.create({
         productId: product._id,
         previousStock: 0,
         newStock: product.stock,
@@ -98,10 +94,10 @@ export const addProduct = async (req, res) => {
         reason: "restock",
         changedBy: sellerId,
         notes: "Initial stock added"
-      }));
+      });
     }
 
-    const sellerObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId));
+    const sellerObj = await AppUser.findById(sellerId);
     logActivity({
       email: sellerObj?.email,
       user: sellerId,
@@ -135,14 +131,13 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
-    const existingProduct = await logQuery(req, `Product.findByIdAndOwner(${id})`, () => ProductService.findByIdAndOwner(id, sellerId));
+    const existingProduct = await ProductService.findByIdAndOwner(id, sellerId);
     if (!existingProduct) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you", requestId: req.requestId });
     }
 
     const updatedData = { ...req.body };
 
-    // If new file uploaded, compress + upload to Cloudinary
     if (req.file?.buffer) {
       const compressedBuffer = await sharp(req.file.buffer)
         .rotate()
@@ -154,8 +149,6 @@ export const updateProduct = async (req, res) => {
       updatedData.image = result.secure_url;
     }
 
-
-    // Parse sizes
     if (updatedData.sizes) {
       const parsedSizes = typeof updatedData.sizes === "string"
         ? JSON.parse(updatedData.sizes)
@@ -168,15 +161,14 @@ export const updateProduct = async (req, res) => {
       updatedData.sizes = parsedSizes;
     }
 
-    // Stock change
     const previousStock = existingProduct.stock;
     const newStock = updatedData.stock !== undefined ? Number(updatedData.stock) : undefined;
 
-    const updatedProduct = await logQuery(req, 'ProductService.update', () => ProductService.update(id, updatedData));
+    const updatedProduct = await ProductService.update(id, updatedData);
 
     if (newStock !== undefined && previousStock !== newStock) {
       const change = newStock - previousStock;
-      await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
+      await StockHistoryService.create({
         productId: existingProduct._id,
         previousStock,
         newStock,
@@ -185,7 +177,7 @@ export const updateProduct = async (req, res) => {
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: sellerId,
         notes: `Stock ${change > 0 ? 'increased' : 'decreased'} by ${Math.abs(change)}`
-      }));
+      });
 
       logApplication({
         event: "STOCK_UPDATED",
@@ -194,7 +186,7 @@ export const updateProduct = async (req, res) => {
       });
     }
 
-    const sellerObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId));
+    const sellerObj = await AppUser.findById(sellerId);
     logActivity({
       email: sellerObj?.email,
       user: sellerId,
@@ -228,14 +220,14 @@ export const deleteProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid product ID", requestId: req.requestId });
     }
 
-    const product = await logQuery(req, `Product.deleteByIdAndOwner(${id})`, () => ProductService.deleteByIdAndOwner(id, sellerId));
+    const product = await ProductService.deleteByIdAndOwner(id, sellerId);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found or not owned by you", requestId: req.requestId });
     }
 
-    await logQuery(req, `StockHistoryService.deleteByProductId(${id})`, () => StockHistoryService.deleteByProductId(id));
+    await StockHistoryService.deleteByProductId(id);
 
-    const sellerObj = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId));
+    const sellerObj = await AppUser.findById(sellerId);
     logActivity({
       email: sellerObj?.email,
       user: sellerId,
@@ -279,15 +271,15 @@ export const bulkDeleteProducts = async (req, res) => {
       return res.status(400).json({ success: false, message: `Invalid product IDs: ${invalidIds.join(", ")}`, requestId: req.requestId });
     }
 
-    const result = await logQuery(req, 'ProductService.bulkDeleteByOwner', () => ProductService.bulkDeleteByOwner(productIds, sellerId));
+    const result = await ProductService.bulkDeleteByOwner(productIds, sellerId);
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: "No products deleted. Make sure they exist and belong to you.", requestId: req.requestId });
     }
 
-    await logQuery(req, 'StockHistoryService.deleteByProductIds', () => StockHistoryService.deleteByProductIds(productIds));
+    await StockHistoryService.deleteByProductIds(productIds);
 
-    const appUser = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId).lean());
+    const appUser = await AppUser.findById(sellerId).lean();
     logActivity({
       email: appUser?.email,
       user: sellerId,
@@ -306,7 +298,6 @@ export const bulkDeleteProducts = async (req, res) => {
       deletedCount: result.deletedCount,
       requestId: req.requestId
     });
-
   } catch (err) {
     logError({
       error: err,
@@ -331,7 +322,7 @@ export const updateStock = async (req, res) => {
       return res.status(400).json({ success: false, message: "Stock must be non-negative", requestId: req.requestId });
     }
 
-    const existingProduct = await logQuery(req, `Product.findByIdAndOwner(${id})`, () => ProductService.findByIdAndOwner(id, sellerId));
+    const existingProduct = await ProductService.findByIdAndOwner(id, sellerId);
     if (!existingProduct) {
       return res.status(400).json({ success: false, message: "Product does not exist", requestId: req.requestId });
     }
@@ -339,11 +330,11 @@ export const updateStock = async (req, res) => {
     const previousStock = existingProduct.stock;
     const newStock = parseInt(stock);
 
-    const updatedProduct = await logQuery(req, `Product.updateStock(${id})`, () => ProductService.updateStock(id, newStock));
+    const updatedProduct = await ProductService.updateStock(id, newStock);
 
     if (previousStock !== newStock) {
       const change = newStock - previousStock;
-      await logQuery(req, 'StockHistoryService.create', () => StockHistoryService.create({
+      await StockHistoryService.create({
         productId: existingProduct._id,
         previousStock,
         newStock,
@@ -352,7 +343,7 @@ export const updateStock = async (req, res) => {
         reason: change > 0 ? "restock" : "adjustment",
         changedBy: sellerId,
         notes: "Quick stock change from seller stock page"
-      }));
+      });
 
       logApplication({
         event: "STOCK_UPDATED",
@@ -360,7 +351,7 @@ export const updateStock = async (req, res) => {
         metadata: { productId: id, previousStock, newStock, change, requestId: req.requestId }
       });
 
-      const appUser = await logQuery(req, 'AppUser.findById', () => AppUser.findById(sellerId).lean());
+      const appUser = await AppUser.findById(sellerId).lean();
       logActivity({
         email: appUser?.email,
         user: sellerId,

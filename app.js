@@ -19,12 +19,15 @@ import inventoryRouter from './routes/inventory.routes.js';
 import superAdminRouter from './routes/superAdmin.routes.js';
 import chatRouter from './routes/chat.routes.js';
 import adminChatRouter from './routes/adminChat.routes.js';
+import meRouter from './routes/me.js';
 import { initializeSocketHandlers } from './sockets/index.js';
 import activityRouter from './routes/activity.routes.js';
 import { loggingMiddleware } from './middlewares/logging.middleware.js';
+import { requestContextMiddleware } from './utils/requestContext.js';
 import { uploadLogsCronJob } from './utils/uploadLogsToCloudinary.js';
 import { logSystem, logError } from './utils/logger.js';
-import meRouter from './routes/me.js';
+import { queryLoggerPlugin } from './utils/mongooseLogger.js';
+import mongoose from 'mongoose';
 import { errorHandler } from './middlewares/errorHandler.js';
 
 // Global Crash Handlers - Must be registered early
@@ -64,6 +67,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 app.use(loggingMiddleware);
+app.use(requestContextMiddleware);
 
 app.use(
   helmet.contentSecurityPolicy({
@@ -121,6 +125,9 @@ const startServer = async () => {
     });
 
     await connectDB();
+
+    // Register query logger plugin globally to all schemas
+    mongoose.plugin(queryLoggerPlugin);
 
     logSystem({
       event: "DATABASE_CONNECTED",

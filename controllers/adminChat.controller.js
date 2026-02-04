@@ -3,7 +3,6 @@ import AdminChatService from "../services/adminChat.service.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUploader.js";
 import cloudinary from "../config/cloudinary.js";
 import { logActivity, logError } from "../utils/logger.js";
-import { logQuery } from "../utils/logQuery.js";
 
 export const getAdminConversations = async (req, res) => {
   try {
@@ -51,7 +50,7 @@ export const startConversation = async (req, res) => {
 export const closeConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const conversation = await logQuery(req, `AdminChatService.closeConversation(${conversationId})`, () => AdminChatService.closeConversation(conversationId));
+    const conversation = await AdminChatService.closeConversation(conversationId);
 
     logActivity({
       email: req.auth.email,

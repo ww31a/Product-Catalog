@@ -158,4 +158,6 @@ class ChatMessageService {
     }
 }
 
-export default new ChatMessageService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("ChatMessageService", new ChatMessageService());

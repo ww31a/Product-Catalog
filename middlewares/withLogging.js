@@ -2,6 +2,7 @@ import { logApplication, logSecurity } from '../utils/logger.js';
 
 /**
  * Wraps middleware to log if it succeeds or fails
+ * RequestId is automatically captured from AsyncLocalStorage context
  * Usage: app.use(withLogging('auth', authMiddleware))
  */
 export const withLogging = (name, middleware) => {
@@ -18,7 +19,6 @@ export const withLogging = (name, middleware) => {
                         event: 'MIDDLEWARE_FAILURE',
                         message: `${name} failed: ${err.message}`,
                         metadata: {
-                            requestId: req.requestId,
                             duration,
                             userId,
                             path: req.originalUrl,
@@ -30,7 +30,6 @@ export const withLogging = (name, middleware) => {
                         event: 'MIDDLEWARE_SUCCESS',
                         message: `${name} completed`,
                         metadata: {
-                            requestId: req.requestId,
                             duration,
                             userId
                         }
@@ -44,7 +43,6 @@ export const withLogging = (name, middleware) => {
                 event: 'MIDDLEWARE_ERROR',
                 message: `${name} crashed: ${error.message}`,
                 metadata: {
-                    requestId: req.requestId,
                     userId: req.auth?.userId || req.user?.id
                 }
             });

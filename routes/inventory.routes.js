@@ -4,8 +4,9 @@ import { getDeadStock, getInStockAlert, getLowStockAlert, getOutOfStockAlert, ge
 
 import { verifyAuth } from "../middlewares/verifyAuth.js";
 import { authorizeRoles } from "../middlewares/authorizeRoles.js";
-
 import { withLogging } from "../middlewares/withLogging.js";
+
+
 
 const inventoryRouter = express.Router();
 
@@ -25,18 +26,18 @@ const inventoryRouter = express.Router();
 
 
 //inventory Reports endpoints
-inventoryRouter.get('/reports/low-stock', verifyAuth, authorizeRoles("seller"), withLogging('SELLER_REPORT_LOW_STOCK', getLowStockAlert));
+inventoryRouter.get('/reports/low-stock', withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getLowStockAlert);
 
-inventoryRouter.get('/reports/out-of-stock', verifyAuth, authorizeRoles("seller"), withLogging('SELLER_REPORT_OUT_OF_STOCK', getOutOfStockAlert));
+inventoryRouter.get('/reports/out-of-stock', withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getOutOfStockAlert);
 
-inventoryRouter.get('/reports/in-stock', verifyAuth, authorizeRoles("seller"), withLogging('SELLER_REPORT_IN_STOCK', getInStockAlert));
+inventoryRouter.get('/reports/in-stock', withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getInStockAlert);
 
 
 //stock change summary
-inventoryRouter.get('/reports/summary', verifyAuth, authorizeRoles("seller"), withLogging('SELLER_REPORT_SUMMARY', getStockSummary));
+inventoryRouter.get('/reports/summary', withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getStockSummary);
 
-inventoryRouter.get('/reports/dead-stock', verifyAuth, authorizeRoles("seller"), withLogging('SELLER_REPORT_DEAD_STOCK', getDeadStock))
+inventoryRouter.get('/reports/dead-stock', withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getDeadStock)
 
-inventoryRouter.get('/reports/best-selling', verifyAuth, authorizeRoles("seller"), withLogging('SELLER_REPORT_BEST_SELLING', getBestSellingProducts))
+inventoryRouter.get('/reports/best-selling', withLogging('Auth', verifyAuth), withLogging('AuthRole', authorizeRoles("seller")), getBestSellingProducts)
 
 export default inventoryRouter;

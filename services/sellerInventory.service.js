@@ -38,13 +38,13 @@ class SellerInventoryService {
       return {
         product: product
           ? {
-              _id: product._id,
-              title: product.title,
-              brand: product.brand,
-              price: product.price,
-              stock: product.stock,
-              image: product.image
-            }
+            _id: product._id,
+            title: product.title,
+            brand: product.brand,
+            price: product.price,
+            stock: product.stock,
+            image: product.image
+          }
           : null,
         totalSold: stat.totalSold,
         salesCount: stat.salesCount,
@@ -146,4 +146,6 @@ class SellerInventoryService {
   }
 }
 
-export default new SellerInventoryService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("SellerInventoryService", new SellerInventoryService());

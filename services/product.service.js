@@ -222,4 +222,6 @@ class ProductService {
   }
 }
 
-export default new ProductService();
+import { createLoggedService } from "../utils/serviceLogger.js";
+
+export default createLoggedService("ProductService", new ProductService());
