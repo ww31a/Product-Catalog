@@ -24,10 +24,7 @@ export const loggingMiddleware = (req, res, next) => {
     const durationMs =
       Number(process.hrtime.bigint() - start) / 1e6;
 
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-      req.socket.remoteAddress ||
-      "unknown";
+    const ip = req.ip
 
     // Determine actor type and ID
     const userId = req.auth?.userId || req.user?.id;
