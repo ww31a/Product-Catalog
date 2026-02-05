@@ -9,8 +9,8 @@ import {
     closeConversation,
     uploadChatImage
 } from "../controllers/adminChat.controller.js";
-import chatUpload from "../middlewares/chatUpload.js";
 
+import upload from "../middlewares/upload.js";
 import { withLogging } from "../middlewares/withLogging.js";
 
 const adminChatRouter = express.Router();
@@ -31,7 +31,7 @@ adminChatRouter.post("/conversations", actionLimiter, withLogging('ADMIN_CHAT_ST
 adminChatRouter.patch("/conversations/:conversationId/close", withLogging('ADMIN_CHAT_CLOSE', closeConversation));
 
 // Upload image for chat
-adminChatRouter.post("/upload", actionLimiter(), chatUpload.single("image"), withLogging('ADMIN_CHAT_UPLOAD_IMAGE', uploadChatImage));
+adminChatRouter.post("/upload", actionLimiter(), upload.single("image"), withLogging('ADMIN_CHAT_UPLOAD_IMAGE', uploadChatImage));
 
 // Get available participants
 // adminChatRouter.get("/participants", getAvailableParticipants);
