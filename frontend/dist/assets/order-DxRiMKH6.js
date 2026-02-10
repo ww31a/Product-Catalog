@@ -1,1 +1,0 @@
-import{z as r}from"./index-B9kqQv96.js";const c=async()=>(await r.get("/api/order"))?.data,n=async()=>(await r.get("/api/order/seller"))?.data,o=async(a,s)=>(await r.put("api/order/seller/status",{orderId:a,status:s}))?.data,d=async a=>(await r.post("/api/order/cancel",{orderId:a}))?.data;export{o as a,n as b,d as c,c as f};
